@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "targets": [
+      "api"
+    ],
+    "ignore": [],
+    "source": "functions"
+  }
+}

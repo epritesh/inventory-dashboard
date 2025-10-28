@@ -1,0 +1,16 @@
+{
+  "name": "inventory-dashboard-root",
+  "private": true,
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev:web": "cd web && npm run dev",
+    "build:web": "cd web && npm run build",
+    "build:functions": "cd catalyst/functions && npm run build",
+    "test:functions": "cd catalyst/functions && npm test",
+    "serve": "catalyst serve"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

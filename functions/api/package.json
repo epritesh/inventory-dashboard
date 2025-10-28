@@ -1,0 +1,12 @@
+{
+	"name": "api",
+	"version": "1.0.0",
+	"main": "index.js",
+	"author": "pritesh@panterarepuestos.com",
+	"dependencies": {
+		"zcatalyst-sdk-node": "latest",
+		"express": "^4.21.2",
+		"axios": "^1.7.2",
+		"dotenv": "^16.4.5"
+	}
+}
