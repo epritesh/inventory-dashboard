@@ -1,10 +1,10 @@
 {
   "defaults": {
-    "project": 1,
+    "project": 2,
     "env": 1
   },
   "actives": {
-    "project": 1,
+    "project": 2,
     "env": 1
   },
   "projects": [
@@ -14,6 +14,24 @@
       "name": "Inventory-Dashboard",
       "domain": {
         "id": "10108710991",
+        "name": "inventory-dashboard-903975067.development"
+      },
+      "timezone": "America/Detroit",
+      "env": [
+        {
+          "idx": 1,
+          "id": "903975067",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    },
+    {
+      "idx": 2,
+      "id": "45178000000020145",
+      "name": "Inventory-Dashboard",
+      "domain": {
+        "id": "10108815650",
         "name": "inventory-dashboard-903975067.development"
       },
       "timezone": "America/Detroit",

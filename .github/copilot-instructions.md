@@ -1,72 +1,54 @@
 # Copilot instructions — Inventory Dashboard (Zoho Catalyst + Zoho Inventory/Books)
 
 Purpose
-- This repo hosts multiple inventory-related efforts. Default approach: Catalyst functions as a backend proxy to Zoho Inventory/Books APIs, plus a web UI dashboard. Keep secrets in Catalyst, never in the frontend.
+- Backend (Catalyst functions) proxies Zoho Inventory/Books securely; frontend (React + Vite) calls only those HTTP endpoints. Secrets live in Catalyst, not the web app.
 
 Big picture
-- Data flow: Web UI → Catalyst Function(s) → Zoho Inventory/Books API → normalize + cache (optional) → UI.
-- Why this shape: Centralizes OAuth and rate limiting in the backend; the UI stays tokenless and simple.
+- Flow: web `fetch('/api/...')` → Catalyst function handler → Zoho API → normalize/aggregate → response to UI.
+- Why: OAuth, rate limits, and retries are centralized server-side; UI remains tokenless.
 
-Repository layout (expected)
-- `web/` — Frontend dashboard (e.g., React + Vite). Talks only to Catalyst HTTP endpoints you define.
-- `catalyst/functions/` — Node.js functions; hold OAuth, API clients, and business logic.
-- `catalyst/config/` — Catalyst project config, env mappings, and any datastore definitions.
-- `docs/` — Short architecture notes and API mapping tables per effort.
-- `scripts/` — One-off data/backfill scripts that reuse the same API client.
+Repo layout (actual)
+- `web/` React + Vite (TS). Proxy for local dev is defined in `web/vite.config.ts`.
+- `catalyst/functions/` TypeScript functions: entry `src/index.ts`, Zoho client `src/lib/zohoClient.ts`, local runner `src/devServer.ts`.
+- `docs/efforts/` Per-effort notes (scopes, endpoints). See `docs/efforts/README.md`.
+- `scripts/` One-off utilities reusing the Zoho client (see `scripts/README.md`).
 
-Developer workflows (PowerShell; confirm CLI naming in your setup)
+Developer workflows (PowerShell)
 ```powershell
-# Note: the npm package is `zcatalyst-cli`, but the executable command is `catalyst`.
+# Login once (opens browser)
+catalyst login  # Windows binary is catalyst.cmd; 'catalyst' works in PowerShell
 
-# One-time: authenticate Catalyst (opens browser)
-catalyst login
+# Local dev: Catalyst emulator + web (run in two shells)
+catalyst serve                 # functions on http://localhost:3000/server/api
+cd web; npm install; npm run dev
 
-# Initialize a new effort inside this repo (creates Catalyst skeleton; run in repo root)
-catalyst init
+# Tests/build (functions)
+npm run test:functions         # runs Jest in catalyst/functions
+npm run build:functions        # tsc build to catalyst/functions/dist
 
-# Local dev: run functions emulator and web dev server (from two shells)
-catalyst serve
-cd web
-npm ci
-npm run dev
-
-# Deploy functions to Catalyst (staging by default; set env via flag/config)
+# Deploy (set env in Catalyst Console)
 catalyst deploy
 ```
 
-Environment and config (set via Catalyst environment variables/secrets)
-- Required for Zoho: ZOHO_DC (us|eu|in|au|jp), ZOHO_ORG_ID, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, ZOHO_SERVICE ("inventory"|"books").
-- Derived/overridable: ZOHO_API_BASE (e.g., https://inventory.zoho.com/api/v1 or https://books.zoho.com/api/v3; confirm version per API docs).
-- Catalyst: CATALYST_PROJECT_ID, CATALYST_ENVIRONMENT (dev|staging|prod).
-- Optional: CACHE_TTL_SECONDS (API response cache), LOG_LEVEL.
+Local routing and examples
+- Vite dev proxy maps `/api/*` → `http://localhost:3000/server/api/*` (see `web/vite.config.ts`).
+- Implemented routes in `catalyst/functions/src/index.ts`:
+  - `GET /api/health` → `{ ok: true, service }`.
+  - `GET /api/items?per_page=5&page=1` → `ZohoClient.listItems` (Books/Inventory; defaults to Books if `ZOHO_SERVICE` unset).
+  - `GET /api/metrics/stockouts?threshold=0&max_pages=5&per_page=200` → computes KPI from paged items.
 
-Integration notes (Zoho Inventory/Books via OAuth2)
-- Use backend-only OAuth: store client creds + refresh token in Catalyst; issue access tokens server-side.
-- Pick endpoints by service:
-  - Inventory: Items, Warehouses, SalesOrders, PurchaseOrders, StockAdjustments.
-  - Books: Items, Invoices, Customers, SalesOrders.
-- Respect rate limits; implement simple backoff/retry and paging. Prefer incremental sync by updated_time when available.
+Environment (configure in Catalyst; do NOT commit secrets)
+- Required: `ZOHO_DC` (us|eu|in|au|jp), `ZOHO_ORG_ID`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`.
+- Optional: `ZOHO_SERVICE` (books|inventory, default books), `CACHE_TTL_SECONDS`, `ZOHO_API_BASE`/`ZOHO_BOOKS_BASE`/`ZOHO_INVENTORY_BASE` (override hosts), `ALLOW_ORIGIN`, `DEBUG_AUTH`.
+- Avoid placing `env_variables` in Catalyst function config files; manage via Console to prevent deploy-time overwrites.
 
-Patterns and conventions for this repo
-- TypeScript in functions and web; central API client under `catalyst/functions/lib/zohoClient.ts` with service-agnostic wrapper and per-service modules.
-- One HTTP entry per UI feature (thin controllers calling reusable service layer).
-- Error model: map Zoho errors to HTTP 4xx/5xx; return `{ code, message, details?, requestId }`.
-- Logging: structured JSON to Catalyst logs; redact tokens; include org, user (if applicable), and service.
-- Tests: unit-test API client with mocked HTTP; add one smoke test per function handler.
+Conventions and patterns
+- Single Zoho client (`src/lib/zohoClient.ts`) handles OAuth refresh, base URL resolution, retries (429/backoff), and paging helpers.
+- Handler is a thin router; return JSON `{ code, message, details? }` on errors; map Zoho errors to HTTP 4xx/5xx.
+- Tests live in `catalyst/functions/src/**/*.test.ts`; run with `npm run test:functions`.
 
-Examples (when you scaffold)
-- Catalyst function route: `GET /api/items?service=inventory` → calls `zoho.inventory.listItems({ page, per_page })`.
-- Web fetch: `GET /api/metrics/stockouts` → backend aggregates Items + SalesOrders into a KPI payload.
-
-Dev convenience
-- Vite proxy forwards `/api` to `http://localhost:9000` during local dev; prefer relative fetches (e.g., `fetch('/api/items')`).
-
-Multi-effort guidance
-- Create one folder per effort under `docs/efforts/<slug>/` with a short README: API scopes used, endpoints touched, and any custom tables.
-- Reuse the same Catalyst project where feasible; separate environments by Catalyst envs (dev/staging/prod) and prefix secrets with effort slug if needed.
-
-Unknowns to confirm (please reply and I’ll fill these in)
-- Preferred frontend stack (React/Vite?) and package manager (npm/pnpm/yarn).
-- Exact Catalyst CLI package/name in your environment (e.g., `zcatalyst`).
-- Primary Zoho DC, target service first (“inventory” or “books”), and required API versions.
-- Any existing Catalyst project ID/environment naming you want standardized here.
+Defaults used here
+- Package manager: npm
+- Catalyst CLI: catalyst (Windows: catalyst.cmd)
+- Zoho service default: books
+- Zoho DC default: us

@@ -90,7 +90,25 @@ export class ZohoClient {
         client_secret: this.clientSecret,
         refresh_token: this.refreshToken
       })
+      
+      if (process.env.DEBUG_AUTH === '1') {
+        console.log('ZohoClient.getAccessToken DEBUG:', {
+          url,
+          clientId: this.clientId.substring(0, 10) + '...',
+          refreshTokenLength: this.refreshToken.length
+        })
+      }
+      
       const resp = await this.withRetry(() => axios.post(url, params))
+      
+      if (process.env.DEBUG_AUTH === '1') {
+        console.log('ZohoClient.getAccessToken RESPONSE:', {
+          status: resp.status,
+          hasAccessToken: !!resp.data.access_token,
+          expiresIn: resp.data.expires_in
+        })
+      }
+      
       const access = resp.data.access_token as string
       const expires = Number(resp.data.expires_in) || this.cacheTtlSeconds
       const record = { access_token: access, expires_at: Math.floor(now + expires) }
@@ -109,20 +127,70 @@ export class ZohoClient {
   private async authHeaders() {
     const token = await this.getAccessToken()
     return {
-      Authorization: `Zoho-oauthtoken ${token}`,
-      'X-com-zoho-subscriptions-organizationid': undefined,
-      'organization_id': this.orgId,
+      Authorization: `Zoho-oauthtoken ${token}`
     } as Record<string, string | undefined>
   }
 
   async listItems(params: { page?: number; per_page?: number } = {}) {
+    if (process.env.DEBUG_AUTH === '1') {
+      console.log('ZohoClient.listItems START - Environment check:', {
+        hasOrgId: !!this.orgId,
+        orgIdLength: this.orgId?.length,
+        hasClientId: !!this.clientId,
+        hasClientSecret: !!this.clientSecret,
+        hasRefreshToken: !!this.refreshToken,
+        service: this.service,
+        dc: this.dc,
+        baseURL: this.http.defaults.baseURL
+      })
+    }
+
     const headers = await this.authHeaders()
-    const query: Record<string, any> = {}
+    const query: Record<string, any> = { organization_id: this.orgId }
     if (params.page) query.page = params.page
     if (params.per_page) query.per_page = params.per_page
     // Books and Inventory both expose /items, shape differs slightly.
-    const resp = await this.withRetry(() => this.http.get('/items', { headers, params: query }))
-    return resp.data
+    
+    // Add debugging info
+    if (process.env.DEBUG_AUTH === '1') {
+      console.log('ZohoClient.listItems REQUEST DEBUG:', {
+        baseURL: this.http.defaults.baseURL,
+        url: '/items',
+        query,
+        authHeaderPresent: !!headers.Authorization,
+        authHeaderPrefix: headers.Authorization?.substring(0, 30) + '...'
+      })
+    }
+    
+    try {
+      const resp = await this.withRetry(() => this.http.get('/items', { headers, params: query }))
+      
+      if (process.env.DEBUG_AUTH === '1') {
+        console.log('ZohoClient.listItems RESPONSE SUCCESS:', {
+          status: resp.status,
+          statusText: resp.statusText,
+          dataType: typeof resp.data,
+          hasItems: !!(resp.data && 'items' in resp.data),
+          dataKeys: Object.keys(resp.data || {}),
+          dataSnippet: typeof resp.data === 'string' ? resp.data.substring(0, 200) : JSON.stringify(resp.data).substring(0, 200)
+        })
+      }
+      
+      return resp.data
+    } catch (error: any) {
+      if (process.env.DEBUG_AUTH === '1') {
+        console.log('ZohoClient.listItems ERROR:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          responseType: typeof error.response?.data,
+          responseSnippet: typeof error.response?.data === 'string' 
+            ? error.response.data.substring(0, 200) 
+            : JSON.stringify(error.response?.data || {}).substring(0, 200)
+        })
+      }
+      throw error
+    }
   }
 
   private async withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {

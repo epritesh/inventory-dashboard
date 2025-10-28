@@ -1,5 +1,5 @@
 import React from 'react'
-import { listItems, getStockouts, type ItemQuery } from './lib/api'
+import { listItems, getStockouts, getHealth, type ItemQuery } from './lib/api'
 
 export function App() {
   const [items, setItems] = React.useState<any[] | null>(null)
@@ -15,7 +15,10 @@ export function App() {
   const [search, setSearch] = React.useState<string>('')
   const [sku, setSku] = React.useState<string>('')
   const [sort, setSort] = React.useState<{ column?: string; order?: 'A' | 'D' }>({})
-  const [status, setStatus] = React.useState<'Active' | 'Inactive' | 'All'>('Active')
+  const [status, setStatus] = React.useState<'Active' | 'Inactive' | 'All'>('All')
+  const [debug, setDebug] = React.useState<boolean>(false)
+  const [health, setHealth] = React.useState<any>(null)
+  const [diag, setDiag] = React.useState<any>(null)
 
   const load = async () => {
     setLoading(true)
@@ -33,12 +36,14 @@ export function App() {
         params.sort_column = sort.column
         if (sort.order) params.sort_order = sort.order
       }
-      const data = await listItems(params)
+      if (debug) (params as any).debug = '1'
+  const data = await listItems(params)
       const maybeItems = (data && Array.isArray((data as any).items)) ? (data as any).items
                         : (Array.isArray(data) ? (data as any) : [])
       setItems(maybeItems)
       const s = (data as any)?.summary as any
       setSummary(s || null)
+  setDiag((data as any)?.diag || null)
       if (s && typeof s.has_more_page === 'boolean') setHasMore(!!s.has_more_page)
       else {
         const pc = (data as any)?.page_context
@@ -68,6 +73,11 @@ export function App() {
     loadKpi()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, service, sort.column, sort.order])
+
+  const loadHealth = async () => {
+    try { const h = await getHealth(); setHealth(h) } catch { /* ignore */ }
+  }
+  React.useEffect(() => { loadHealth() }, [])
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
@@ -122,7 +132,34 @@ export function App() {
         <button onClick={() => { setPage(1); load() }} disabled={loading}>
           {loading ? 'Loading…' : 'Apply'}
         </button>
+        <label>
+          Debug:
+          <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} style={{ marginLeft: 6 }} />
+        </label>
       </div>
+      {!loading && Array.isArray(items) && items.length === 0 && (
+        <div style={{ marginTop: 12, padding: 12, background: '#fafafa', border: '1px solid #eee' }}>
+          <div style={{ marginBottom: 6 }}><strong>No items found</strong></div>
+          <div style={{ fontSize: 13, color: '#555' }}>
+            Try adjusting filters (Status = All, clear Search/SKU) or confirm items exist in Zoho {service}.
+            {health && (
+              <div style={{ marginTop: 6 }}>
+                Service: <code>{health.service}</code>, DC: <code>{health.dc}</code>, Org: <code>{health.org ?? '(masked)'}</code>
+              </div>
+            )}
+            {kpi && (
+              <div style={{ marginTop: 6 }}>
+                Note: KPI indicates <strong>{kpi.totalItems}</strong> items scanned with <strong>{kpi.stockouts}</strong> at/below the threshold. If you expect rows here, the backend Items route may be filtering differently than the KPI aggregator.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+  {diag && debug && (
+        <pre style={{ marginTop: 8, background: '#f6f8fa', padding: 8, fontSize: 12, overflow: 'auto' }}>
+{JSON.stringify(diag, null, 2)}
+        </pre>
+      )}
       <div style={{ marginTop: 8 }}>
         <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
           ‹ Prev

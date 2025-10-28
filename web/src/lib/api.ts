@@ -60,3 +60,7 @@ export async function getStockouts(params: { threshold?: number; per_page?: numb
   const q = p.toString()
   return http(`/api/metrics/stockouts${q ? `?${q}` : ''}`)
 }
+
+export async function getHealth() {
+  return http(`/api/health`)
+}

@@ -1,5 +1,11 @@
+DATA/
 node_modules/
 dist/
+client/
+openapi-books/
+openapi-inventory/
 .DS_Store
 .env*
 *.log
+DATA_SCHEMA.json
+DATA_SCHEMA.md

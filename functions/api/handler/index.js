@@ -32,6 +32,29 @@ function cacheSet(key, payload, ttlSeconds) {
 async function handler(req, res) {
     try {
         const { pathname, query } = (0, node_url_1.parse)(req.url || '', true);
+
+        // Lightweight token validation endpoint to verify env vars and OAuth are working
+        if (req.method === 'GET' && pathname === '/api/auth-test') {
+            try {
+                const client = new zohoClient_1.ZohoClient({
+                    dc: process.env.ZOHO_DC || 'us',
+                    service: (process.env.ZOHO_SERVICE === 'inventory' ? 'inventory' : 'books'),
+                    orgId: process.env.ZOHO_ORG_ID,
+                    clientId: process.env.ZOHO_CLIENT_ID,
+                    clientSecret: process.env.ZOHO_CLIENT_SECRET,
+                    refreshToken: process.env.ZOHO_REFRESH_TOKEN,
+                    cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
+                });
+                const token = await client.getAccessToken();
+                res.writeHead?.(200, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify({ success: true, tokenLength: token?.length || 0, tokenPrefix: token ? token.substring(0, 18) + '...' : null }));
+                return;
+            } catch (error) {
+                res.writeHead?.(500, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify({ success: false, error: error?.message, details: error?.response?.data }));
+                return;
+            }
+        }
         if (req.method === 'GET' && pathname === '/api/health') {
             const org = process.env.ZOHO_ORG_ID || '';
             const orgMasked = org ? `${org.slice(0, 3)}***${org.slice(-2)}` : undefined;
@@ -71,9 +94,11 @@ async function handler(req, res) {
                         extraParams[k] = v;
                 }
             }
+            const debugRequested = query?.debug === '1' || query?.debug === 'true';
             const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
+            const useCache = ttl > 0 && !debugRequested;
             const cacheKey = `items:${service}:${process.env.ZOHO_ORG_ID}:${page || 1}:${per_page || ''}:${JSON.stringify(extraParams)}`;
-            if (ttl > 0) {
+            if (useCache) {
                 const cached = cacheGet(cacheKey);
                 if (cached) {
                     res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'hit' });
@@ -81,6 +106,7 @@ async function handler(req, res) {
                     return;
                 }
             }
+
             const client = new zohoClient_1.ZohoClient({
                 dc: process.env.ZOHO_DC || 'us',
                 service,
@@ -91,6 +117,12 @@ async function handler(req, res) {
                 cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
             });
             const data = await client.listItems(Object.assign({ page, per_page }, extraParams));
+            
+            // Debug logging to understand Zoho response
+            if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
+                console.log('[DEBUG] Zoho listItems response:', JSON.stringify(data, null, 2));
+                console.log('[DEBUG] Request params:', JSON.stringify(Object.assign({ page, per_page }, extraParams), null, 2));
+            }
             // Surface Zoho logical errors that still return HTTP 200
             if (data && typeof data === 'object' && 'code' in data && !Array.isArray(data.items)) {
                 const anyData = data;
@@ -112,8 +144,18 @@ async function handler(req, res) {
                 (typeof it.sku === 'string' && it.sku) ? it.sku :
                     (typeof it.item_code === 'string' && it.item_code) ? it.item_code : undefined
             );
+            
+            // Apply business rule filter: exclude SKUs starting with 0-, 800-, 2000-
+            const applyBusinessFilter = (items) => {
+                return items.filter(item => {
+                    const sku = getSku(item) || '';
+                    return !sku.startsWith('0-') && !sku.startsWith('800-') && !sku.startsWith('2000-');
+                });
+            };
+            
             const itemsArr = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
-            const normalizedItems = itemsArr.map((it) => Object.assign({}, it, { qty: getQty(it), sku: getSku(it) }));
+            const businessFilteredItems = applyBusinessFilter(itemsArr);
+            const normalizedItems = businessFilteredItems.map((it) => Object.assign({}, it, { qty: getQty(it), sku: getSku(it) }));
             const pc = data?.page_context;
             const summary = {
                 page: Number((pc?.page ?? page ?? 1)),
@@ -128,13 +170,27 @@ async function handler(req, res) {
                 summary,
                 page_context: pc
             };
-            if (ttl > 0)
+            if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
+                responseBody.diag = {
+                    upstreamPageContext: pc || null,
+                    inferredHasMore: summary.has_more_page,
+                    returnedCount: normalizedItems.length,
+                    service,
+                    rawUpstreamItemsLength: itemsArr ? itemsArr.length : 0,
+                    businessFilteredCount: businessFilteredItems ? businessFilteredItems.length : 0,
+                    extraParams,
+                    zohoResponseKeys: data ? Object.keys(data) : null,
+                    hasItemsProperty: data ? ('items' in data) : false,
+                    itemsIsArray: data?.items ? Array.isArray(data.items) : false
+                };
+            }
+            if (useCache)
                 cacheSet(cacheKey, responseBody, ttl);
             res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
             res.end?.(JSON.stringify(responseBody));
             return;
         }
-        if (req.method === 'GET' && pathname === '/api/metrics/stockouts') {
+    if (req.method === 'GET' && pathname === '/api/metrics/stockouts') {
             const required = ['ZOHO_ORG_ID','ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN'];
             const missing = required.filter(k => !process.env[k]);
             if (missing.length) {
@@ -148,8 +204,10 @@ async function handler(req, res) {
             const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
             const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
             const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
+            const debugRequested = query?.debug === '1' || query?.debug === 'true';
+            const useCache = ttl > 0 && !debugRequested;
             const cacheKey = `stockouts:${service}:${process.env.ZOHO_ORG_ID}:${threshold}:${maxPages}:${perPage}`;
-            if (ttl > 0) {
+            if (useCache) {
                 const cached = cacheGet(cacheKey);
                 if (cached) {
                     res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'hit' });
@@ -167,10 +225,13 @@ async function handler(req, res) {
                 cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
             });
             let allItems = [];
+            const pageSummaries = [];
             for (let page = 1; page <= maxPages; page++) {
                 const data = await client.listItems({ page, per_page: perPage });
                 const items = data?.items || data || [];
                 allItems = allItems.concat(items);
+                const pc = data?.page_context;
+                pageSummaries.push({ page, count: Array.isArray(items) ? items.length : 0, total: pc?.total, has_more_page: pc?.has_more_page });
                 if (!items.length)
                     break;
             }
@@ -181,11 +242,21 @@ async function handler(req, res) {
                     (typeof it.quantity === 'number' ? it.quantity : undefined) ??
                     0);
             };
-            const stockouts = allItems.filter((it) => getQty(it) <= threshold);
+            
+            // Apply business rule filter: exclude SKUs starting with 0-, 800-, 2000-
+            const applyBusinessFilter = (items) => {
+                return items.filter(item => {
+                    const sku = item.sku || item.item_code || '';
+                    return !sku.startsWith('0-') && !sku.startsWith('800-') && !sku.startsWith('2000-');
+                });
+            };
+            
+            const stockouts = applyBusinessFilter(allItems).filter((it) => getQty(it) <= threshold);
+            const filteredAllItems = applyBusinessFilter(allItems);
             const body = {
                 kpi: {
                     stockouts: stockouts.length,
-                    totalItems: allItems.length,
+                    totalItems: filteredAllItems.length,
                     threshold
                 },
                 sample: stockouts.slice(0, 10).map((it) => ({
@@ -195,7 +266,16 @@ async function handler(req, res) {
                     qty: getQty(it)
                 }))
             };
-            if (ttl > 0)
+            if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
+                body.diag = {
+                    service,
+                    per_page: perPage,
+                    max_pages: maxPages,
+                    pagesFetched: pageSummaries.length,
+                    pageSummaries
+                };
+            }
+            if (useCache)
                 cacheSet(cacheKey, body, ttl);
             res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
             res.end?.(JSON.stringify(body));

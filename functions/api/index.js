@@ -42,19 +42,32 @@ app.use((req, res, next) => {
 	next()
 })
 
-// Normalize the Catalyst Advanced I/O base path (e.g., /server/api or /server/api/<functionName>)
-app.use((req, res, next) => {
-	const base = '/server/api'
-	if (req.url && req.url.startsWith(base)) {
-		const rest = req.url.slice(base.length) || ''
-		// If rest already begins with '/api', don't double-prefix
-		req.url = rest.startsWith('/api') ? rest : ('/api' + rest)
-	}
-	next()
-})
+	// Minimal ping for diagnostics (bypasses handler)
+	app.get('/ping', (req, res) => {
+		res.status(200).json({ pong: true, time: new Date().toISOString() })
+	})
 
-// Forward everything to our handler (which routes /api/* internally)
-app.all('*', (req, res) => handler(req, res))
+// Path normalization: map /server/api/* to /api/* for compatibility with Zoho requests
+app.all('*', (req, res) => {
+	// Normalize Catalyst URL paths:
+	// - /server/api/api/items -> /api/items (double /api from some proxies)
+	// - /server/api/items     -> /api/items (Vite dev proxy case)
+	// - /server/api           -> /api
+	if (req.url.startsWith('/server/api/api')) {
+		req.url = req.url.replace('/server/api', '')
+	} else if (req.url === '/server/api' || req.url.startsWith('/server/api/')) {
+		req.url = req.url.replace('/server/api', '/api')
+	} else if (!req.url.startsWith('/api') && req.url !== '/ping') {
+		// When the app is mounted under /server/api by the emulator, Express strips the mountpath
+		// and we may receive paths like /health, /items, /metrics/stockouts. Prefix /api/ in those cases.
+		if (req.url.startsWith('/')) {
+			req.url = '/api' + req.url
+		} else {
+			req.url = '/api/' + req.url
+		}
+	}
+	handler(req, res)
+})
 
 // Support both CommonJS and ESM default import semantics
 module.exports = app

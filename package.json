@@ -6,6 +6,7 @@
   "scripts": {
     "dev:web": "cd web && npm run dev",
     "build:web": "cd web && npm run build",
+    "build:client": "npm --prefix web ci && npm --prefix web run build",
     "build:functions": "cd catalyst/functions && npm run build",
     "test:functions": "cd catalyst/functions && npm test",
     "serve": "catalyst serve"

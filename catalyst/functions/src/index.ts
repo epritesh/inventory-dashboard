@@ -4,10 +4,75 @@ import { ZohoClient } from './lib/zohoClient'
 // Catalyst HTTP function entry (Express-like). Exported symbol name may vary by Catalyst binding.
 export async function handler(req: any, res: any) {
   try {
+    // Set CORS headers first to handle authentication issues
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': process.env.ALLOW_ORIGIN || 'http://localhost:5173',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalyst-Token',
+      'Content-Type': 'application/json'
+    }
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      res.writeHead?.(200, corsHeaders)
+      res.end?.('')
+      return
+    }
+
+    // Try to bypass authentication for API endpoints
     const { pathname, query } = parse(req.url || '', true)
+    
+    // Check if this is an authenticated request
+    const hasAuth = req.headers?.['x-catalyst-token'] || req.headers?.authorization
+    
+    // For unauthenticated API requests, try to handle them directly
+    if (pathname?.startsWith('/api/') && !hasAuth) {
+      console.log('Handling unauthenticated API request:', pathname)
+    }
+
+    if (req.method === 'GET' && pathname === '/api/auth-test') {
+      try {
+        const client = new ZohoClient({
+          service: process.env.ZOHO_SERVICE as any || 'books',
+          dc: process.env.ZOHO_DC as any || 'us',
+          orgId: process.env.ZOHO_ORG_ID!,
+          clientId: process.env.ZOHO_CLIENT_ID!,
+          clientSecret: process.env.ZOHO_CLIENT_SECRET!,
+          refreshToken: process.env.ZOHO_REFRESH_TOKEN!,
+          cacheTtlSeconds: parseInt(process.env.CACHE_TTL_SECONDS || '3600')
+        })
+        
+        // Try to get a fresh access token
+        const token = await (client as any).getAccessToken()
+        
+        res.writeHead?.(200, corsHeaders)
+        res.end?.(JSON.stringify({
+          success: true,
+          tokenLength: token?.length || 0,
+          tokenPrefix: token?.substring(0, 20) + '...'
+        }))
+        return
+      } catch (error: any) {
+        res.writeHead?.(500, corsHeaders)
+        res.end?.(JSON.stringify({
+          success: false,
+          error: error.message,
+          details: error.response?.data || null
+        }))
+        return
+      }
+    }
+
     if (req.method === 'GET' && pathname === '/api/health') {
-      res.writeHead?.(200, { 'content-type': 'application/json' })
-      res.end?.(JSON.stringify({ ok: true, service: process.env.ZOHO_SERVICE || 'inventory' }))
+      res.writeHead?.(200, corsHeaders)
+      res.end?.(JSON.stringify({ 
+        ok: true, 
+        service: process.env.ZOHO_SERVICE || 'books',
+        dc: process.env.ZOHO_DC || 'us',
+        org: process.env.ZOHO_ORG_ID?.replace(/^(\d{3})\d*(\d{2})$/, '$1***$2'),
+        allowOrigin: process.env.ALLOW_ORIGIN || 'http://localhost:5173',
+        debugAuth: process.env.DEBUG_AUTH === '1'
+      }))
       return
     }
 
@@ -24,7 +89,7 @@ export async function handler(req: any, res: any) {
         cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
       })
       const data = await client.listItems({ page, per_page })
-      res.writeHead?.(200, { 'content-type': 'application/json' })
+      res.writeHead?.(200, corsHeaders)
       res.end?.(JSON.stringify(data))
       return
     }
@@ -77,21 +142,27 @@ export async function handler(req: any, res: any) {
         }))
       }
 
-      res.writeHead?.(200, { 'content-type': 'application/json' })
+      res.writeHead?.(200, corsHeaders)
       res.end?.(JSON.stringify(body))
       return
     }
 
-    res.writeHead?.(404, { 'content-type': 'application/json' })
+    res.writeHead?.(404, corsHeaders)
     res.end?.(JSON.stringify({ code: 'not_found', message: 'Route not found' }))
   } catch (err: any) {
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': process.env.ALLOW_ORIGIN || 'http://localhost:5173',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Content-Type': 'application/json'
+    }
     const status = err?.status || 500
     const body = {
       code: err?.code || 'internal_error',
       message: err?.message || 'Unexpected error',
       details: err?.response?.data,
     }
-    res.writeHead?.(status, { 'content-type': 'application/json' })
+    res.writeHead?.(status, corsHeaders)
     res.end?.(JSON.stringify(body))
   }
 }

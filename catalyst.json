@@ -5,5 +5,8 @@
     ],
     "ignore": [],
     "source": "functions"
+  },
+  "apig": {
+    "enabled": false
   }
 }

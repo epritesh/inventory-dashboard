@@ -18,9 +18,24 @@ catalyst serve
 cd web
 # First-time install: generates package-lock.json
 npm install
-# Dev uses a Vite proxy for /api → http://localhost:9000; no API base env needed
+# Dev uses a Vite proxy for /api → http://localhost:3000; no API base env needed
 npm run dev
 ```
+
+Quick start against the deployed cloud API (Windows PowerShell)
+
+```powershell
+# From repo root
+cd web
+
+# Point the web app to your deployed function base URL
+$env:VITE_API_BASE = 'https://<your-env>.catalystserverless.com/server/api'
+
+# Start Vite dev server
+npm run dev
+```
+
+Tip: When VITE_API_BASE is set, the web app will call `${VITE_API_BASE}/api/...` (e.g., `/api/items` → `…/server/api/api/items`).
 
 Catalyst setup (one-time in this repo)
 
@@ -83,7 +98,7 @@ Notes
 
 - OAuth happens server-side only (Catalyst). The web app never holds Zoho tokens.
 - Prefer incremental syncs by updated_time when supported. Respect rate limits.
-- Dev uses a Vite proxy for `/api` → `http://localhost:9000`; no `VITE_API_BASE` needed.
+- Dev uses a Vite proxy for `/api` → `http://localhost:3000`; no `VITE_API_BASE` needed.
 - Default Zoho service is Books unless `ZOHO_SERVICE` is set.
 
 Authentication (Catalyst Native Authentication)
@@ -97,6 +112,47 @@ First-time vs repeat installs
 - Subsequent clean installs (e.g., CI): you can use `npm ci` once `package-lock.json` exists.
 
 Refer to `./.github/copilot-instructions.md` for agent-specific guidance.
+
+Documentation
+
+- Data schema (fixed CSVs): see `../DATA_SCHEMA.md` (monorepo root) for column headers and suggested module mappings.
+
+## Slate (Client) GitHub integration
+
+Use Catalyst Slate to auto-build and host the client on every push to your branch.
+
+Prerequisites
+
+- `web/vite.config.ts` outputs production builds to `../client` (already configured in this repo).
+- `web/.env.production` sets `VITE_API_BASE=https://<your-env>.catalystserverless.com/server/api`.
+- Optional root script: `npm run build:client` builds the client from repo root.
+
+Console settings (Create Deployment → GitHub)
+
+- Framework: Other
+- Node Runtime: Node 20
+- Deployment Source: Branch → Branch Name: `main` → Auto Deploy: ON
+- Root Path: `.` (repo root)
+- Build Path: `client`
+- Install Command (choose ONE style)
+  - Simple (uses root script): `npm ci`
+  - Build Command: `npm run build:client`
+    - Runs `npm --prefix web ci && npm --prefix web run build`, writing to `client/`.
+  - OR explicit (no root script):
+    - Install Command: `npm --prefix web ci`
+    - Build Command: `npm --prefix web run build`
+- SPA routing: enable Single Page Application/fallback to `index.html` (enables deep links)
+
+Build-time variables (optional)
+
+- If you prefer not to store `web/.env.production`, add an App Variable instead:
+  - Key: `VITE_API_BASE`
+  - Value: `https://<your-env>.catalystserverless.com/server/api`
+
+Result
+
+- On each push to `main`, Slate installs, builds to `client/`, and publishes.
+- The hosted app calls your functions under `/server/api` on the same origin—no extra CORS config needed.
 
 ## Cloud endpoints (Catalyst)
 
@@ -121,6 +177,18 @@ VITE_API_BASE=https://<your-env>.catalystserverless.com/server/api
 
 With this set, the web app will call `VITE_API_BASE + /api/...` (e.g., `…/server/api/api/items`).
 
+### Troubleshooting: No items showing in the UI
+
+- Set Status to "All" and clear Search/SKU, then click Apply.
+- Toggle Debug in the UI and click Apply. If the backend has `DEBUG_AUTH=1`, you'll see diagnostic details.
+- Visit the health endpoint to confirm service/DC/org:
+  - `…/server/api/api/health`
+  - If `service` is `books`, ensure your Zoho Books org actually has Items; create one sample item if needed.
+  - If you want to use Zoho Inventory instead, set `ZOHO_SERVICE=inventory` and ensure your refresh token has Inventory scopes. A 401 with code 57 on Inventory calls indicates missing authorization/scopes.
+- If the web app still shows nothing, try hitting the items endpoint directly:
+  - Books (broad): `…/server/api/api/items?service=books&filter_by=Status.All&per_page=5`
+  - Inventory: `…/server/api/api/items?service=inventory&per_page=5` (requires Inventory OAuth scopes)
+
 ### Avoid wiping environment variables on deploy
 
 Do not keep an `env_variables` block in `functions/api/catalyst-config.json`. The CLI treats those values as the source of truth and can overwrite/clear variables in your Catalyst environment during `catalyst deploy`. This repo removes that field so you can manage secrets in the Catalyst Console without them being reset on deploy.
@@ -133,3 +201,4 @@ Required variables (set in Catalyst Console → Environment):
 - ZOHO_CLIENT_SECRET
 - ZOHO_REFRESH_TOKEN
 - Optional: ZOHO_SERVICE=books, CACHE_TTL_SECONDS
+- Optional (frontend/cloud CORS): ALLOW_ORIGIN (e.g., `http://localhost:5173`) and `DEBUG_AUTH=1` for diagnostics
