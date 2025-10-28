@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node -e \"require('fs').copyFileSync('../client/index.html','../client/404.html')\"",
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
