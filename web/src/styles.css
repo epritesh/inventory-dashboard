@@ -17,6 +17,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .link { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; }
 .link:hover { border-color: rgba(255,255,255,0.2); }
+.link.small { padding: 4px 8px; font-size: 11px; }
 .title { font-size: 22px; font-weight: 650; letter-spacing: .2px; display: inline-flex; align-items: center; gap: 10px; }
 .title .logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; box-shadow: 0 0 0 2px rgba(0,0,0,0.3); }
 .title .brand { color: var(--brand); }
@@ -33,6 +34,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.card.clickable { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease, transform .06s ease; }
+.card.clickable:hover { border-color: rgba(255,255,255,0.18); box-shadow: 0 6px 18px rgba(0,0,0,0.25); transform: translateY(-1px); }
+.card .card-actions { margin-top: 6px; }
 .card .label { color: var(--muted); font-size: 12px; }
 .card .value { font-size: 24px; font-weight: 700; margin-top: 6px; }
 

@@ -33,6 +33,23 @@ export function App() {
   const [panelLoading, setPanelLoading] = React.useState<boolean>(false)
   const [panelItems, setPanelItems] = React.useState<any[] | null>(null)
 
+  const openReorder = async () => {
+    setPanel('reorder'); setPanelItems(null); setPanelLoading(true);
+    try {
+      const data = await getReorderRisk({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
+      setPanelItems(Array.isArray(data?.items) ? data.items : [])
+    } catch {}
+    finally { setPanelLoading(false) }
+  }
+  const openInv = async () => {
+    setPanel('inv'); setPanelItems(null); setPanelLoading(true);
+    try {
+      const data = await getInventoryValue({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
+      setPanelItems(Array.isArray(data?.items) ? data.items : [])
+    } catch {}
+    finally { setPanelLoading(false) }
+  }
+
   const clearKey = () => {
     try { localStorage.removeItem('accessKey') } catch {}
     setHasKey(false)
@@ -316,27 +333,19 @@ export function App() {
           <div className="label">Threshold</div>
           <div className="value">{kpi ? `≤ ${kpi.threshold}` : '—'}</div>
         </div>
-        <div className="card" style={{ cursor: 'pointer' }} title="View items below reorder level" onClick={async () => {
-          setPanel('reorder'); setPanelItems(null); setPanelLoading(true);
-          try {
-            const data = await getReorderRisk({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
-            setPanelItems(Array.isArray(data?.items) ? data.items : [])
-          } catch {}
-          finally { setPanelLoading(false) }
-        }}>
+        <div className="card clickable" title="View items below reorder level" role="button" tabIndex={0}
+          onClick={openReorder}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReorder(); } }}>
           <div className="label">Below Reorder Level</div>
           <div className="value">{kpiReorder ? kpiReorder.belowReorder : '—'}</div>
+          <div className="card-actions"><button className="link small" onClick={(e) => { e.stopPropagation(); openReorder(); }}>View details ›</button></div>
         </div>
-        <div className="card" style={{ cursor: 'pointer' }} title="View inventory value by item" onClick={async () => {
-          setPanel('inv'); setPanelItems(null); setPanelLoading(true);
-          try {
-            const data = await getInventoryValue({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
-            setPanelItems(Array.isArray(data?.items) ? data.items : [])
-          } catch {}
-          finally { setPanelLoading(false) }
-        }}>
+        <div className="card clickable" title="View inventory value by item" role="button" tabIndex={0}
+          onClick={openInv}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openInv(); } }}>
           <div className="label">Inventory Value (On Hand)</div>
           <div className="value">{kpiInv ? fmtMoney(kpiInv.totalValue, kpiInv.currency || undefined) : '—'}</div>
+          <div className="card-actions"><button className="link small" onClick={(e) => { e.stopPropagation(); openInv(); }}>View details ›</button></div>
         </div>
       </div>
       {!loading && Array.isArray(items) && items.length === 0 && (
