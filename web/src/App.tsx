@@ -34,6 +34,7 @@ export function App() {
   const [panelLoading, setPanelLoading] = React.useState<boolean>(false)
   const [panelItems, setPanelItems] = React.useState<any[] | null>(null)
   const [panelSort, setPanelSort] = React.useState<{ column?: string; order?: 'A'|'D' }>({})
+  const [debouncing, setDebouncing] = React.useState<boolean>(false)
 
   const openReorder = async () => {
     setPanel('reorder'); setPanelItems(null); setPanelLoading(true); setPanelSort({});
@@ -145,9 +146,11 @@ export function App() {
 
   // Debounce search and SKU changes to auto-apply filters
   React.useEffect(() => {
-    const t = setTimeout(() => {
+    setDebouncing(true)
+    const t = setTimeout(async () => {
       setPage(1)
-      load()
+      await load()
+      setDebouncing(false)
     }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,10 +270,12 @@ export function App() {
         <label>
           Search name:
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="contains…" />
+          {debouncing && <span className="spinner" aria-label="Refreshing" title="Refreshing"></span>}
         </label>
         <label>
           SKU:
           <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="exact SKU" />
+          {debouncing && <span className="spinner" aria-label="Refreshing" title="Refreshing"></span>}
         </label>
         <label>
           Per page:
@@ -346,6 +351,9 @@ export function App() {
           <div className="label">Below Reorder Level</div>
           <div className="value">{kpiReorder ? kpiReorder.belowReorder : '—'}</div>
           <div className="card-actions"><button className="link small" onClick={(e) => { e.stopPropagation(); openReorder(); }}>View details ›</button></div>
+          {kpiReorder && kpiReorder.missingReorder > 0 && (
+            <div className="card-actions"><span className="badge warn" title="Items without reorder level configured">{kpiReorder.missingReorder} missing reorder</span></div>
+          )}
         </div>
         <div className="card clickable" title="View inventory value by item" role="button" tabIndex={0}
           onClick={openInv}
@@ -353,6 +361,9 @@ export function App() {
           <div className="label">Inventory Value (On Hand)</div>
           <div className="value">{kpiInv ? fmtMoney(kpiInv.totalValue, kpiInv.currency || undefined) : '—'}</div>
           <div className="card-actions"><button className="link small" onClick={(e) => { e.stopPropagation(); openInv(); }}>View details ›</button></div>
+          {kpiInv && kpiInv.itemsMissingCost > 0 && (
+            <div className="card-actions"><span className="badge warn" title="Items missing cost; value excludes these">{kpiInv.itemsMissingCost} missing cost</span></div>
+          )}
         </div>
       </div>
       {!loading && Array.isArray(items) && items.length === 0 && (

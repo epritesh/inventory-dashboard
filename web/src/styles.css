@@ -24,10 +24,13 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0e1730; color: var(--muted); }
 .badge.ok { color: #baf7ce; border-color: rgba(22,163,74,.3); background: rgba(22,163,74,.08); }
 .badge.err { color: #ffd1cf; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+.badge.warn { color: #ffe9c2; border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.12); }
 
 .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
 .controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .controls input, .controls select { background: #0c1326; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+.spinner { display: inline-block; width: 14px; height: 14px; margin-left: 6px; vertical-align: middle; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .btn { background: var(--brand); color: white; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
 .btn:hover { filter: brightness(1.05); }
 .btn[disabled] { opacity: .6; cursor: default; }
