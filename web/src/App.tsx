@@ -104,6 +104,7 @@ export function App() {
         setPage(1)
         // Kick off a load with the new key
         load()
+        loadHealth()
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,7 +190,7 @@ export function App() {
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Access required</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="Enter access key" />
-            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setShowKeyPanel(false); setPage(1); load(); } catch {} }}>Unlock</button>
+            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setShowKeyPanel(false); setPage(1); load(); loadHealth(); } catch {} }}>Unlock</button>
             <button className="btn" onClick={() => { try { localStorage.removeItem('accessKey'); } catch {} finally { setKeyInput(''); setShowKeyPanel(false); setNeedsKey(false); } }}>Cancel</button>
           </div>
         </div>
