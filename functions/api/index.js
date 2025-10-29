@@ -32,8 +32,11 @@ app.use((req, res, next) => {
 		allow = allowEnv[0]
 	}
 	res.header('Access-Control-Allow-Origin', allow)
-	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-		res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+	// Reflect requested headers when present, otherwise provide a safe allowlist including our custom key header
+	const reqAllowHeaders = req.headers['access-control-request-headers']
+	const allowHeaders = reqAllowHeaders ? String(reqAllowHeaders) : 'Content-Type, Authorization, X-Access-Key'
+	res.header('Access-Control-Allow-Headers', allowHeaders)
+	res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
 		res.header('Access-Control-Max-Age', '600')
 	if (process.env.DEBUG_AUTH === '1') {
 		res.header('X-Debug-Auth', '1')
