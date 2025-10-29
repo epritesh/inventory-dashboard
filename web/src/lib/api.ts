@@ -3,11 +3,19 @@ async function http(path: string, init?: RequestInit) {
   // Otherwise, rely on the Vite proxy (dev) or same-origin (prod) using relative /api paths.
   const base = (import.meta as any).env?.VITE_API_BASE as string | undefined
   const url = base ? `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}` : path
+  // Merge headers and attach access key if present
+  const headers = new Headers((init && (init as any).headers) || undefined)
+  try {
+    const k = localStorage.getItem('accessKey')
+    if (k) headers.set('X-Access-Key', k)
+  } catch {}
   // Do not set Content-Type for simple GETs; it triggers a CORS preflight unnecessarily.
-  const res = await fetch(url, { ...init, credentials: 'omit', mode: 'cors' })
+  const res = await fetch(url, { ...init, headers, credentials: 'omit', mode: 'cors' })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`)
+    const err: any = new Error(`HTTP ${res.status}: ${text || res.statusText}`)
+    ;(err as any).status = res.status
+    throw err
   }
   return res.json()
 }

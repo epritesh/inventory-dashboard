@@ -19,6 +19,8 @@ export function App() {
   const [debug, setDebug] = React.useState<boolean>(false)
   const [health, setHealth] = React.useState<any>(null)
   const [diag, setDiag] = React.useState<any>(null)
+  const [needsKey, setNeedsKey] = React.useState<boolean>(false)
+  const [keyInput, setKeyInput] = React.useState<string>("")
 
   const load = async () => {
     setLoading(true)
@@ -51,7 +53,12 @@ export function App() {
         else setHasMore(Array.isArray(maybeItems) && maybeItems.length >= (perPage || 0))
       }
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to load items')
+      if (e?.status === 401) {
+        setNeedsKey(true)
+        setError(null)
+      } else {
+        setError(e?.message ?? 'Failed to load items')
+      }
     } finally {
       setLoading(false)
     }
@@ -150,6 +157,16 @@ export function App() {
           <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
         </label>
       </div>
+
+      {needsKey && (
+        <div className="notice" style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Access required</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="Enter access key" />
+            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setPage(1); load(); } catch {} }}>Unlock</button>
+          </div>
+        </div>
+      )}
 
       <div className="cards" role="region" aria-label="Key metrics">
         <div className="card">

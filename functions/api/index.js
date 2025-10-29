@@ -47,6 +47,46 @@ app.use((req, res, next) => {
 		res.status(200).json({ pong: true, time: new Date().toISOString() })
 	})
 
+// Lightweight shared-key gate to prevent public data access (optional)
+// Set ACCESS_KEY in Catalyst env vars to enable. You can also set ALLOW_PUBLIC_HEALTH=1 to allow /api/health without key.
+app.use((req, res, next) => {
+	if (req.method === 'OPTIONS') return next()
+	const requiredKey = process.env.ACCESS_KEY
+	if (!requiredKey) return next()
+	// Normalize path similar to router below to decide what to protect
+	const normalize = (u) => {
+		let s = u || '/'
+		if (s.startsWith('/server/api/api')) s = s.replace('/server/api', '')
+		else if (s === '/server/api' || s.startsWith('/server/api/')) s = s.replace('/server/api', '/api')
+		else if (!s.startsWith('/api') && s !== '/ping') s = (s.startsWith('/') ? ('/api' + s) : ('/api/' + s))
+		return s
+	}
+	const path = normalize(req.url)
+	const allowPublicHealth = process.env.ALLOW_PUBLIC_HEALTH === '1'
+	const isProtected = path.startsWith('/api/') && !(allowPublicHealth && path === '/api/health')
+	if (!isProtected) return next()
+
+	// Read key from header or cookie
+	const hdr = req.headers['x-access-key']
+	let cookieKey
+	const cookie = req.headers['cookie']
+	if (cookie) {
+		try {
+			const parts = cookie.split(';').map(s => s.trim())
+			for (const p of parts) {
+				const [k, v] = p.split('=')
+				if (k === 'access_key') { cookieKey = decodeURIComponent(v || '') }
+			}
+		} catch {}
+	}
+	const provided = (hdr || cookieKey || '').trim()
+	if (!provided || provided !== String(requiredKey)) {
+		res.status(401).json({ code: 'unauthorized', message: 'Access key required' })
+		return
+	}
+	return next()
+})
+
 // Path normalization: map /server/api/* to /api/* for compatibility with Zoho requests
 app.all('*', (req, res) => {
 	// Normalize Catalyst URL paths:
