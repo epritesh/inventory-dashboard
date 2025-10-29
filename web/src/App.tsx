@@ -396,6 +396,8 @@ export function App() {
       )}
       {error && <p className="notice error">{error}</p>}
       {Array.isArray(items) && (
+        <>
+        <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 12 }}>Tip: Click a row or use the “View” action to see item details.</div>
         <div className="tablewrap">
         <table>
           <thead>
@@ -403,19 +405,25 @@ export function App() {
               <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'name', order: s.column === 'name' && s.order === 'A' ? 'D' : 'A' }))}>Name {sort.column === 'name' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
               <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'sku', order: s.column === 'sku' && s.order === 'A' ? 'D' : 'A' }))}>SKU {sort.column === 'sku' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
               <th className="num">Qty</th>
+              <th className="num">Details</th>
             </tr>
           </thead>
           <tbody>
             {items.map((it: any) => (
-              <tr key={it.item_id || it.item_id_string || it.sku} onClick={() => setSelected(it)} style={{ cursor: 'pointer' }}>
+              <tr key={it.item_id || it.item_id_string || it.sku} className="clickable-row" onClick={() => setSelected(it)} tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(it) } }}>
                 <td>{it.name}</td>
                 <td>{it.sku || it.item_code || '-'}</td>
                 <td className="num">{(it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '-'}</td>
+                <td className="num actions">
+                  <button className="link small" aria-label={`View details for ${it.name}`} onClick={(e) => { e.stopPropagation(); setSelected(it) }}>View</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         </div>
+        </>
       )}
       {selected && (
         <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null) }}>
