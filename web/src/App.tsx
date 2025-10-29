@@ -25,6 +25,7 @@ export function App() {
   const [hasKey, setHasKey] = React.useState<boolean>(() => {
     try { return !!localStorage.getItem('accessKey') } catch { return false }
   })
+  const [kpiThreshold, setKpiThreshold] = React.useState<number>(0)
 
   const clearKey = () => {
     try { localStorage.removeItem('accessKey') } catch {}
@@ -102,6 +103,33 @@ export function App() {
     try { const h = await getHealth(); setHealth(h) } catch { /* ignore */ }
   }
   React.useEffect(() => { loadHealth() }, [])
+
+  // Restore filters from localStorage on first mount
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem('filters')
+      if (raw) {
+        const f = JSON.parse(raw)
+        if (f.service) setService(f.service)
+        if (f.status) setStatus(f.status)
+        if (typeof f.page === 'number') setPage(f.page)
+        if (typeof f.perPage === 'number') setPerPage(f.perPage)
+        if (typeof f.search === 'string') setSearch(f.search)
+        if (typeof f.sku === 'string') setSku(f.sku)
+        if (f.sort && (f.sort.column || f.sort.order)) setSort(f.sort)
+        if (typeof f.kpiThreshold === 'number') setKpiThreshold(f.kpiThreshold)
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist filters when they change
+  React.useEffect(() => {
+    try {
+      const f = { service, status, page, perPage, search, sku, sort, kpiThreshold }
+      localStorage.setItem('filters', JSON.stringify(f))
+    } catch { /* ignore */ }
+  }, [service, status, page, perPage, search, sku, sort.column, sort.order, kpiThreshold])
 
   // On first load, allow providing the key via URL (?accessKey=... or ?key=...)
   React.useEffect(() => {
@@ -286,8 +314,8 @@ export function App() {
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>SKU</th>
+              <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'name', order: s.column === 'name' && s.order === 'A' ? 'D' : 'A' }))}>Name {sort.column === 'name' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
+              <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'sku', order: s.column === 'sku' && s.order === 'A' ? 'D' : 'A' }))}>SKU {sort.column === 'sku' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
               <th className="num">Qty</th>
             </tr>
           </thead>
@@ -303,7 +331,34 @@ export function App() {
         </table>
         </div>
       )}
+      {Array.isArray(items) && items.length > 0 && (
+        <div className="toolbar">
+          <button className="link" onClick={() => {
+            try {
+              const rows = items.map((it: any) => ({ name: it.name, sku: (it.sku || it.item_code || ''), qty: ((it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '') }))
+              const hdr = ['name','sku','qty']
+              const csv = [hdr.join(','), ...rows.map(r => hdr.map(h => (`"${String((r as any)[h] ?? '').replace(/"/g,'""')}"`)).join(','))].join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `items_page${page}.csv`
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+              URL.revokeObjectURL(url)
+            } catch {}
+          }}>Export CSV</button>
+        </div>
+      )}
       <h2 style={{ marginTop: 24, fontSize: 16, color: 'var(--muted)' }}>Stockouts KPI</h2>
+      <div className="controls" style={{ marginTop: 8 }}>
+        <label>
+          KPI threshold:
+          <input type="number" value={kpiThreshold} onChange={(e) => setKpiThreshold(Number(e.target.value || 0))} style={{ width: 80 }} />
+        </label>
+        <button className="btn" onClick={() => { getStockouts({ threshold: kpiThreshold, per_page: 200, max_pages: 3 }).then((data) => { setKpi(data?.kpi ?? null); setSample(data?.sample ?? null) }).catch(() => {}) }}>Update KPI</button>
+      </div>
       {kpi ? (
         <div className="card" style={{ marginTop: 8 }}>
           <div><strong>{kpi.stockouts}</strong> stockouts of <strong>{kpi.totalItems}</strong> items (threshold ≤ {kpi.threshold})</div>
