@@ -22,6 +22,22 @@ export function App() {
   const [needsKey, setNeedsKey] = React.useState<boolean>(false)
   const [keyInput, setKeyInput] = React.useState<string>("")
   const [showKeyPanel, setShowKeyPanel] = React.useState<boolean>(false)
+  const [hasKey, setHasKey] = React.useState<boolean>(() => {
+    try { return !!localStorage.getItem('accessKey') } catch { return false }
+  })
+
+  const clearKey = () => {
+    try { localStorage.removeItem('accessKey') } catch {}
+    setHasKey(false)
+    setKeyInput('')
+    setNeedsKey(true)
+    setShowKeyPanel(false)
+    setItems(null)
+    setKpi(null)
+    setSample(null)
+    setHealth(null)
+    loadHealth()
+  }
 
   const load = async () => {
     setLoading(true)
@@ -93,7 +109,8 @@ export function App() {
       const params = new URLSearchParams(window.location.search)
       const k = params.get('accessKey') || params.get('key')
       if (k) {
-        localStorage.setItem('accessKey', k)
+  localStorage.setItem('accessKey', k)
+  setHasKey(true)
         // Clean the URL without reloading the page
         const url = new URL(window.location.href)
         url.searchParams.delete('accessKey')
@@ -125,8 +142,15 @@ export function App() {
         <div className={`badge ${online ? 'ok' : 'err'}`}>
           {online ? 'Online' : 'Offline'} • {envService} • {envDc.toUpperCase()}
         </div>
-        <div>
-          <button className="btn" onClick={() => setShowKeyPanel(true)} style={{ marginLeft: 8 }}>Enter access key</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {hasKey ? (
+            <>
+              <span className="badge" title="A stored access key will be used for API calls">Key set</span>
+              <button className="link" onClick={clearKey}>Clear</button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => setShowKeyPanel(true)} style={{ marginLeft: 8 }}>Enter access key</button>
+          )}
         </div>
       </div>
       <div className="controls" role="region" aria-label="Filters and actions">
@@ -190,7 +214,7 @@ export function App() {
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Access required</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="Enter access key" />
-            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setShowKeyPanel(false); setPage(1); load(); loadHealth(); } catch {} }}>Unlock</button>
+            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setHasKey(true); setNeedsKey(false); setShowKeyPanel(false); setPage(1); load(); loadHealth(); } catch {} }}>Unlock</button>
             <button className="btn" onClick={() => { try { localStorage.removeItem('accessKey'); } catch {} finally { setKeyInput(''); setShowKeyPanel(false); setNeedsKey(false); } }}>Cancel</button>
           </div>
         </div>
