@@ -21,6 +21,7 @@ export function App() {
   const [diag, setDiag] = React.useState<any>(null)
   const [needsKey, setNeedsKey] = React.useState<boolean>(false)
   const [keyInput, setKeyInput] = React.useState<string>("")
+  const [showKeyPanel, setShowKeyPanel] = React.useState<boolean>(false)
 
   const load = async () => {
     setLoading(true)
@@ -86,6 +87,28 @@ export function App() {
   }
   React.useEffect(() => { loadHealth() }, [])
 
+  // On first load, allow providing the key via URL (?accessKey=... or ?key=...)
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const k = params.get('accessKey') || params.get('key')
+      if (k) {
+        localStorage.setItem('accessKey', k)
+        // Clean the URL without reloading the page
+        const url = new URL(window.location.href)
+        url.searchParams.delete('accessKey')
+        url.searchParams.delete('key')
+        window.history.replaceState(null, '', url.toString())
+        setNeedsKey(false)
+        setShowKeyPanel(false)
+        setPage(1)
+        // Kick off a load with the new key
+        load()
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const online = !!health?.ok
   const envService = health?.service || service
   const envDc = health?.dc || 'us'
@@ -100,6 +123,9 @@ export function App() {
         </div>
         <div className={`badge ${online ? 'ok' : 'err'}`}>
           {online ? 'Online' : 'Offline'} • {envService} • {envDc.toUpperCase()}
+        </div>
+        <div>
+          <button className="btn" onClick={() => setShowKeyPanel(true)} style={{ marginLeft: 8 }}>Enter access key</button>
         </div>
       </div>
       <div className="controls" role="region" aria-label="Filters and actions">
@@ -158,12 +184,13 @@ export function App() {
         </label>
       </div>
 
-      {needsKey && (
+      {(needsKey || showKeyPanel) && (
         <div className="notice" style={{ marginTop: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Access required</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="Enter access key" />
-            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setPage(1); load(); } catch {} }}>Unlock</button>
+            <button className="btn" onClick={() => { try { localStorage.setItem('accessKey', keyInput.trim()); setNeedsKey(false); setShowKeyPanel(false); setPage(1); load(); } catch {} }}>Unlock</button>
+            <button className="btn" onClick={() => { try { localStorage.removeItem('accessKey'); } catch {} finally { setKeyInput(''); setShowKeyPanel(false); setNeedsKey(false); } }}>Cancel</button>
           </div>
         </div>
       )}
