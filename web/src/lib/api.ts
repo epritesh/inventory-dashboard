@@ -14,14 +14,23 @@ async function http(path: string, init?: RequestInit) {
     p = p.replace(/^\/(api)(?=\/|$)/, '') || '/'
   }
   const url = base ? `${base.replace(/\/$/, '')}${p}` : p
-  // Merge headers and attach access key if present
+  // Merge headers; in dev use header for key, in prod append as query to avoid CORS preflight
   const headers = new Headers((init && (init as any).headers) || undefined)
+  let finalUrl = url
   try {
     const k = localStorage.getItem('accessKey')
-    if (k) headers.set('X-Access-Key', k)
+    if (k) {
+      if (base) {
+        const u = new URL(url, window.location.origin)
+        if (!u.searchParams.has('access_key')) u.searchParams.set('access_key', k)
+        finalUrl = u.toString()
+      } else {
+        headers.set('X-Access-Key', k)
+      }
+    }
   } catch {}
   // Do not set Content-Type for simple GETs; it triggers a CORS preflight unnecessarily.
-  const res = await fetch(url, { ...init, headers, credentials: 'omit', mode: 'cors' })
+  const res = await fetch(finalUrl, { ...init, headers, credentials: 'omit', mode: 'cors' })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     const err: any = new Error(`HTTP ${res.status}: ${text || res.statusText}`)

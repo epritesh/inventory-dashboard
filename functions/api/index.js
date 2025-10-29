@@ -13,22 +13,44 @@ const app = express()
 
 // CORS driven by ALLOW_ORIGIN (comma-separated list) or defaults to *
 app.use((req, res, next) => {
-	const allowEnv = (process.env.ALLOW_ORIGIN || '*').split(',').map(s => s.trim()).filter(Boolean)
-	const origin = req.headers.origin
+	const allowEnvRaw = (process.env.ALLOW_ORIGIN || '*').split(',').map(s => s.trim()).filter(Boolean)
+	// Normalize configured origins by trimming trailing slashes
+	const allowEnv = allowEnvRaw.map(s => s.replace(/\/+$/, ''))
+	const origin = (req.headers.origin || '').replace(/\/+$/, '')
 	let allow = '*'
 	const allowLocalhostAny = process.env.ALLOW_LOCALHOST_ANY === '1' || process.env.DEBUG_AUTH === '1'
 
 	if (allowEnv.length === 1 && allowEnv[0] === '*') {
 		allow = '*'
 	} else if (origin && allowEnv.includes(origin)) {
-		allow = origin
+		// Exact match (ignoring trailing slash)
+		allow = req.headers.origin
 		res.header('Vary', 'Origin')
 	} else if (origin && allowLocalhostAny && /^http:\/\/localhost:\d+$/i.test(origin)) {
 		// Dev convenience: when enabled, allow any localhost port
-		allow = origin
+		allow = req.headers.origin
 		res.header('Vary', 'Origin')
+	} else if (allowEnv.length > 0 && origin) {
+		// If origin doesn't match exactly (e.g., trailing slash configured), prefer reflecting the request origin
+		// only when the hostname matches one of the configured hosts.
+		try {
+			const o = new URL(req.headers.origin)
+			const ok = allowEnv.some(a => {
+				try {
+					const u = new URL(a)
+					return u.protocol === o.protocol && u.hostname === o.hostname && (u.port || '') === (o.port || '')
+				} catch { return false }
+			})
+			if (ok) {
+				allow = req.headers.origin
+				res.header('Vary', 'Origin')
+			} else {
+				allow = allowEnv[0]
+			}
+		} catch {
+			allow = allowEnv[0]
+		}
 	} else if (allowEnv.length > 0) {
-		// pick the first configured origin if current origin isn't in list
 		allow = allowEnv[0]
 	}
 	res.header('Access-Control-Allow-Origin', allow)
@@ -82,7 +104,13 @@ app.use((req, res, next) => {
 			}
 		} catch {}
 	}
-	const provided = (hdr || cookieKey || '').trim()
+	// Also allow access_key via query string to avoid CORS preflight when needed
+	let queryKey
+	try {
+		const u = new URL(req.protocol + '://' + (req.headers.host || 'localhost') + req.url)
+		queryKey = u.searchParams.get('access_key') || undefined
+	} catch {}
+	const provided = (hdr || cookieKey || queryKey || '').trim()
 	if (!provided || provided !== String(requiredKey)) {
 		res.status(401).json({ code: 'unauthorized', message: 'Access key required' })
 		return
