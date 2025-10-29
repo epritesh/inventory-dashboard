@@ -1,8 +1,13 @@
 async function http(path: string, init?: RequestInit) {
-  // If VITE_API_BASE is set, send requests to the deployed Catalyst function base (e.g., https://.../server/api)
+  // If VITE_API_BASE is set, it should point to the Catalyst function base, typically ending with '/server/api'.
+  // In that case, don't duplicate the '/api' segment from callers; strip a leading '/api' from the provided path.
   // Otherwise, rely on the Vite proxy (dev) or same-origin (prod) using relative /api paths.
   const base = (import.meta as any).env?.VITE_API_BASE as string | undefined
-  const url = base ? `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}` : path
+  let p = path.startsWith('/') ? path : `/${path}`
+  if (base && p.startsWith('/api')) {
+    p = p.replace(/^\/(api)(?=\/|$)/, '') || '/'
+  }
+  const url = base ? `${base.replace(/\/$/, '')}${p}` : p
   // Merge headers and attach access key if present
   const headers = new Headers((init && (init as any).headers) || undefined)
   try {
