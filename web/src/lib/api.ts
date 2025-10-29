@@ -92,3 +92,21 @@ export async function getStockouts(params: { threshold?: number; per_page?: numb
 export async function getHealth() {
   return http(pathFor(`/health`))
 }
+
+export async function getReorderRisk(params: { per_page?: number; max_pages?: number } = {}) {
+  const p = new URLSearchParams()
+  if (params.per_page) p.set('per_page', String(params.per_page))
+  if (params.max_pages) p.set('max_pages', String(params.max_pages))
+  if (!(import.meta as any).env?.VITE_ZOHO_SERVICE) p.set('service', 'books')
+  const q = p.toString()
+  return http(pathFor(`/metrics/reorder-risk${q ? `?${q}` : ''}`))
+}
+
+export async function getInventoryValue(params: { per_page?: number; max_pages?: number } = {}) {
+  const p = new URLSearchParams()
+  if (params.per_page) p.set('per_page', String(params.per_page))
+  if (params.max_pages) p.set('max_pages', String(params.max_pages))
+  if (!(import.meta as any).env?.VITE_ZOHO_SERVICE) p.set('service', 'books')
+  const q = p.toString()
+  return http(pathFor(`/metrics/inventory-value${q ? `?${q}` : ''}`))
+}

@@ -1,5 +1,5 @@
 import React from 'react'
-import { listItems, getStockouts, getHealth, type ItemQuery } from './lib/api'
+import { listItems, getStockouts, getHealth, getReorderRisk, getInventoryValue, type ItemQuery } from './lib/api'
 
 export function App() {
   const [items, setItems] = React.useState<any[] | null>(null)
@@ -27,6 +27,8 @@ export function App() {
   })
   const [kpiThreshold, setKpiThreshold] = React.useState<number>(0)
   const [selected, setSelected] = React.useState<any | null>(null)
+  const [kpiReorder, setKpiReorder] = React.useState<{ belowReorder: number; totalWithReorder: number; missingReorder: number } | null>(null)
+  const [kpiInv, setKpiInv] = React.useState<{ totalValue: number; currency: string | null; itemsWithCost: number; itemsMissingCost: number } | null>(null)
 
   const clearKey = () => {
     try { localStorage.removeItem('accessKey') } catch {}
@@ -93,10 +95,28 @@ export function App() {
       console.warn('KPI load failed:', e?.message)
     }
   }
+  const loadReorder = async () => {
+    try {
+      const data = await getReorderRisk({ per_page: 200, max_pages: 3 })
+      setKpiReorder(data?.kpi ?? null)
+    } catch (e: any) {
+      console.warn('Reorder KPI load failed:', e?.message)
+    }
+  }
+  const loadInvValue = async () => {
+    try {
+      const data = await getInventoryValue({ per_page: 200, max_pages: 3 })
+      setKpiInv(data?.kpi ?? null)
+    } catch (e: any) {
+      console.warn('Inventory value KPI load failed:', e?.message)
+    }
+  }
 
   React.useEffect(() => {
     load()
     loadKpi()
+    loadReorder()
+    loadInvValue()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, service, sort.column, sort.order])
 
@@ -170,6 +190,15 @@ export function App() {
   const envService = health?.service || service
   const envDc = health?.dc || 'us'
   const buildInfo = (import.meta as any).env?.VITE_GIT_SHA || ''
+  const fmtMoney = (n: number | null | undefined, currency?: string | null) => {
+    if (typeof n !== 'number') return '—'
+    try {
+      if (currency) return n.toLocaleString(undefined, { style: 'currency', currency, maximumFractionDigits: 0 })
+      return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+    } catch {
+      return n.toFixed(0)
+    }
+  }
 
   const resetFilters = () => {
     setSearch('')
@@ -283,6 +312,14 @@ export function App() {
         <div className="card">
           <div className="label">Threshold</div>
           <div className="value">{kpi ? `≤ ${kpi.threshold}` : '—'}</div>
+        </div>
+        <div className="card">
+          <div className="label">Below Reorder Level</div>
+          <div className="value">{kpiReorder ? kpiReorder.belowReorder : '—'}</div>
+        </div>
+        <div className="card">
+          <div className="label">Inventory Value (On Hand)</div>
+          <div className="value">{kpiInv ? fmtMoney(kpiInv.totalValue, kpiInv.currency || undefined) : '—'}</div>
         </div>
       </div>
       {!loading && Array.isArray(items) && items.length === 0 && (

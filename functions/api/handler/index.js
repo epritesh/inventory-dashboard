@@ -71,10 +71,10 @@ async function handler(req, res) {
         }
         if (req.method === 'GET' && pathname === '/api/items') {
             const required = ['ZOHO_ORG_ID','ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN'];
-            const missing = required.filter(k => !process.env[k]);
-            if (missing.length) {
+            const missingEnv = required.filter(k => !process.env[k]);
+            if (missingEnv.length) {
                 res.writeHead?.(503, { 'content-type': 'application/json' });
-                res.end?.(JSON.stringify({ code: 'missing_env', message: 'Required environment variables are missing', missing }));
+                res.end?.(JSON.stringify({ code: 'missing_env', message: 'Required environment variables are missing', missing: missingEnv }));
                 return;
             }
             const page = query?.page ? Number(query.page) : undefined;
@@ -188,6 +188,223 @@ async function handler(req, res) {
                 cacheSet(cacheKey, responseBody, ttl);
             res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
             res.end?.(JSON.stringify(responseBody));
+            return;
+        }
+        // KPI: Below Reorder Level
+        if (req.method === 'GET' && pathname === '/api/metrics/reorder-risk') {
+            const required = ['ZOHO_ORG_ID','ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN'];
+            const missingEnv2 = required.filter(k => !process.env[k]);
+            if (missingEnv2.length) {
+                res.writeHead?.(503, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify({ code: 'missing_env', message: 'Required environment variables are missing', missing: missingEnv2 }));
+                return;
+            }
+            const maxPages = query?.max_pages ? Number(query.max_pages) : 5;
+            const perPage = query?.per_page ? Number(query.per_page) : 200;
+            const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
+            const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
+            const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
+            const debugRequested = query?.debug === '1' || query?.debug === 'true';
+            const useCache = ttl > 0 && !debugRequested;
+            const cacheKey = `reorder:${service}:${process.env.ZOHO_ORG_ID}:${maxPages}:${perPage}`;
+            if (useCache) {
+                const cached = cacheGet(cacheKey);
+                if (cached) {
+                    res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'hit' });
+                    res.end?.(JSON.stringify(cached));
+                    return;
+                }
+            }
+            const client = new zohoClient_1.ZohoClient({
+                dc: process.env.ZOHO_DC || 'us',
+                service,
+                orgId: process.env.ZOHO_ORG_ID,
+                clientId: process.env.ZOHO_CLIENT_ID,
+                clientSecret: process.env.ZOHO_CLIENT_SECRET,
+                refreshToken: process.env.ZOHO_REFRESH_TOKEN,
+                cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
+            });
+            let allItems = [];
+            const pageSummaries = [];
+            for (let page = 1; page <= maxPages; page++) {
+                const data = await client.listItems({ page, per_page: perPage });
+                const items = data?.items || data || [];
+                allItems = allItems.concat(items);
+                const pc = data?.page_context;
+                pageSummaries.push({ page, count: Array.isArray(items) ? items.length : 0, total: pc?.total, has_more_page: pc?.has_more_page });
+                if (!items.length) break;
+            }
+            const getQty = (it) => (
+                (typeof it.available_stock === 'number' ? it.available_stock : undefined) ??
+                (typeof it.stock_on_hand === 'number' ? it.stock_on_hand : undefined) ??
+                (typeof it.quantity === 'number' ? it.quantity : undefined) ??
+                0
+            );
+            const getSku = (it) => (
+                (typeof it.sku === 'string' && it.sku) ? it.sku :
+                (typeof it.item_code === 'string' && it.item_code) ? it.item_code : undefined
+            );
+            const getReorder = (it) => (
+                (typeof it.reorder_level === 'number' ? it.reorder_level : undefined) ??
+                (typeof it.reorder_point === 'number' ? it.reorder_point : undefined) ??
+                (typeof it.re_order_level === 'number' ? it.re_order_level : undefined) ??
+                undefined
+            );
+            const applyBusinessFilter = (items) => items.filter(item => {
+                const sku = getSku(item) || '';
+                return !sku.startsWith('0-') && !sku.startsWith('800-') && !sku.startsWith('2000-');
+            });
+            const filtered = applyBusinessFilter(allItems);
+            let below = 0, withReorder = 0, missingReorder = 0;
+            const sample = [];
+            for (const it of filtered) {
+                const r = getReorder(it);
+                if (typeof r === 'number' && r >= 0) {
+                    withReorder++;
+                    const q = getQty(it);
+                    if (q <= r) {
+                        below++;
+                        if (sample.length < 10) {
+                            sample.push({
+                                id: it.item_id || it.item_id_string || undefined,
+                                name: it.name,
+                                sku: getSku(it) || undefined,
+                                qty: q,
+                                reorder_level: r,
+                                variance: (r - q)
+                            });
+                        }
+                    }
+                } else {
+                    missingReorder++;
+                }
+            }
+            const body = {
+                kpi: {
+                    belowReorder: below,
+                    totalWithReorder: withReorder,
+                    missingReorder: missingReorder
+                },
+                sample
+            };
+            if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
+                body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries };
+            }
+            if (useCache) cacheSet(cacheKey, body, ttl);
+            res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
+            res.end?.(JSON.stringify(body));
+            return;
+        }
+        // KPI: Inventory Value (On Hand)
+        if (req.method === 'GET' && pathname === '/api/metrics/inventory-value') {
+            const required = ['ZOHO_ORG_ID','ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN'];
+            const missing = required.filter(k => !process.env[k]);
+            if (missing.length) {
+                res.writeHead?.(503, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify({ code: 'missing_env', message: 'Required environment variables are missing', missing }));
+                return;
+            }
+            const maxPages = query?.max_pages ? Number(query.max_pages) : 5;
+            const perPage = query?.per_page ? Number(query.per_page) : 200;
+            const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
+            const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
+            const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
+            const debugRequested = query?.debug === '1' || query?.debug === 'true';
+            const useCache = ttl > 0 && !debugRequested;
+            const cacheKey = `invvalue:${service}:${process.env.ZOHO_ORG_ID}:${maxPages}:${perPage}`;
+            if (useCache) {
+                const cached = cacheGet(cacheKey);
+                if (cached) {
+                    res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'hit' });
+                    res.end?.(JSON.stringify(cached));
+                    return;
+                }
+            }
+            const client = new zohoClient_1.ZohoClient({
+                dc: process.env.ZOHO_DC || 'us',
+                service,
+                orgId: process.env.ZOHO_ORG_ID,
+                clientId: process.env.ZOHO_CLIENT_ID,
+                clientSecret: process.env.ZOHO_CLIENT_SECRET,
+                refreshToken: process.env.ZOHO_REFRESH_TOKEN,
+                cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS || '300')
+            });
+            let allItems = [];
+            const pageSummaries = [];
+            for (let page = 1; page <= maxPages; page++) {
+                const data = await client.listItems({ page, per_page: perPage });
+                const items = data?.items || data || [];
+                allItems = allItems.concat(items);
+                const pc = data?.page_context;
+                pageSummaries.push({ page, count: Array.isArray(items) ? items.length : 0, total: pc?.total, has_more_page: pc?.has_more_page });
+                if (!items.length) break;
+            }
+            const getQty = (it) => (
+                (typeof it.available_stock === 'number' ? it.available_stock : undefined) ??
+                (typeof it.stock_on_hand === 'number' ? it.stock_on_hand : undefined) ??
+                (typeof it.quantity === 'number' ? it.quantity : undefined) ??
+                0
+            );
+            const getSku = (it) => (
+                (typeof it.sku === 'string' && it.sku) ? it.sku :
+                (typeof it.item_code === 'string' && it.item_code) ? it.item_code : undefined
+            );
+            const getCost = (it) => (
+                (typeof it.cost_price === 'number' ? it.cost_price : undefined) ??
+                (typeof it.purchase_rate === 'number' ? it.purchase_rate : undefined) ??
+                (typeof it.initial_stock_rate === 'number' ? it.initial_stock_rate : undefined) ??
+                undefined
+            );
+            const getCurrency = (it) => (
+                (typeof it.currency_code === 'string' ? it.currency_code : undefined)
+            );
+            const applyBusinessFilter = (items) => items.filter(item => {
+                const sku = getSku(item) || '';
+                return !sku.startsWith('0-') && !sku.startsWith('800-') && !sku.startsWith('2000-');
+            });
+            const filtered = applyBusinessFilter(allItems);
+            let totalValue = 0;
+            let withCost = 0;
+            let missingCost = 0;
+            let currency = undefined;
+            const sample = [];
+            for (const it of filtered) {
+                const qty = getQty(it);
+                const cost = getCost(it);
+                if (currency == null) currency = getCurrency(it);
+                if (typeof cost === 'number') {
+                    withCost++;
+                    const val = qty * cost;
+                    totalValue += val;
+                    if (sample.length < 10) {
+                        sample.push({
+                            id: it.item_id || it.item_id_string || undefined,
+                            name: it.name,
+                            sku: getSku(it) || undefined,
+                            qty,
+                            cost,
+                            value: val
+                        });
+                    }
+                } else {
+                    missingCost++;
+                }
+            }
+            const body = {
+                kpi: {
+                    totalValue,
+                    currency: currency || null,
+                    itemsWithCost: withCost,
+                    itemsMissingCost: missingCost
+                },
+                sample
+            };
+            if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
+                body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries };
+            }
+            if (useCache) cacheSet(cacheKey, body, ttl);
+            res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
+            res.end?.(JSON.stringify(body));
             return;
         }
     if (req.method === 'GET' && pathname === '/api/metrics/stockouts') {
