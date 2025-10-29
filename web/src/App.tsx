@@ -192,9 +192,9 @@ export function App() {
   const buildInfo = (import.meta as any).env?.VITE_GIT_SHA || ''
   const fmtMoney = (n: number | null | undefined, currency?: string | null) => {
     if (typeof n !== 'number') return '—'
+    const c = currency || 'CRC'
     try {
-      if (currency) return n.toLocaleString(undefined, { style: 'currency', currency, maximumFractionDigits: 0 })
-      return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      return n.toLocaleString(undefined, { style: 'currency', currency: c, maximumFractionDigits: 0 })
     } catch {
       return n.toFixed(0)
     }

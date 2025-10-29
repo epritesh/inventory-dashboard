@@ -390,17 +390,18 @@ async function handler(req, res) {
                     missingCost++;
                 }
             }
+            const defaultCurrency = process.env.DEFAULT_CURRENCY || 'CRC';
             const body = {
                 kpi: {
                     totalValue,
-                    currency: currency || null,
+                    currency: currency || defaultCurrency,
                     itemsWithCost: withCost,
                     itemsMissingCost: missingCost
                 },
                 sample
             };
             if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
-                body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries };
+                body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries, resolvedCurrency: body.kpi.currency };
             }
             if (useCache) cacheSet(cacheKey, body, ttl);
             res.writeHead?.(200, { 'content-type': 'application/json', 'x-cache': 'miss' });
