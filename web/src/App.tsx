@@ -79,28 +79,38 @@ export function App() {
   }
   React.useEffect(() => { loadHealth() }, [])
 
+  const online = !!health?.ok
+  const envService = health?.service || service
+  const envDc = health?.dc || 'us'
+  const buildInfo = (import.meta as any).env?.VITE_GIT_SHA || ''
+
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
-      <h1>Inventory Dashboard</h1>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="container">
+      <div className="header">
+        <div className="title">Inventory Dashboard</div>
+        <div className={`badge ${online ? 'ok' : 'err'}`}>
+          {online ? 'Online' : 'Offline'} • {envService} • {envDc.toUpperCase()}
+        </div>
+      </div>
+      <div className="controls" role="region" aria-label="Filters and actions">
         <label>
           Service:
-          <select value={service} onChange={(e) => { setPage(1); setService(e.target.value as any) }} style={{ marginLeft: 6 }}>
+          <select value={service} onChange={(e) => { setPage(1); setService(e.target.value as any) }}>
             <option value="books">Books</option>
             <option value="inventory">Inventory</option>
           </select>
         </label>
         <label>
           Search name:
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="contains…" style={{ marginLeft: 6 }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="contains…" />
         </label>
         <label>
           SKU:
-          <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="exact SKU" style={{ marginLeft: 6 }} />
+          <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="exact SKU" />
         </label>
         <label>
           Per page:
-          <select value={perPage} onChange={(e) => { setPage(1); setPerPage(Number(e.target.value)) }} style={{ marginLeft: 6 }}>
+          <select value={perPage} onChange={(e) => { setPage(1); setPerPage(Number(e.target.value)) }}>
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={200}>200</option>
@@ -108,13 +118,13 @@ export function App() {
         </label>
         <label>
           Sort:
-          <select value={sort.column || ''} onChange={(e) => setSort((s) => ({ ...s, column: e.target.value || undefined }))} style={{ marginLeft: 6 }}>
+          <select value={sort.column || ''} onChange={(e) => setSort((s) => ({ ...s, column: e.target.value || undefined }))}>
             <option value="">(none)</option>
             <option value="name">Name</option>
             <option value="rate">Rate</option>
             <option value="sku">SKU</option>
           </select>
-          <select value={sort.order || 'A'} onChange={(e) => setSort((s) => ({ ...s, order: (e.target.value as 'A' | 'D') }))} style={{ marginLeft: 6 }}>
+          <select value={sort.order || 'A'} onChange={(e) => setSort((s) => ({ ...s, order: (e.target.value as 'A' | 'D') }))}>
             <option value="A">Asc</option>
             <option value="D">Desc</option>
           </select>
@@ -122,25 +132,40 @@ export function App() {
         {service === 'books' && (
           <label>
             Status:
-            <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as any) }} style={{ marginLeft: 6 }}>
+            <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as any) }}>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
               <option value="All">All</option>
             </select>
           </label>
         )}
-        <button onClick={() => { setPage(1); load() }} disabled={loading}>
+        <button className="btn" onClick={() => { setPage(1); load() }} disabled={loading}>
           {loading ? 'Loading…' : 'Apply'}
         </button>
         <label>
           Debug:
-          <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} style={{ marginLeft: 6 }} />
+          <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
         </label>
       </div>
+
+      <div className="cards" role="region" aria-label="Key metrics">
+        <div className="card">
+          <div className="label">Stockouts</div>
+          <div className="value">{kpi ? kpi.stockouts : '—'}</div>
+        </div>
+        <div className="card">
+          <div className="label">Total Items (scanned)</div>
+          <div className="value">{kpi ? kpi.totalItems : '—'}</div>
+        </div>
+        <div className="card">
+          <div className="label">Threshold</div>
+          <div className="value">{kpi ? `≤ ${kpi.threshold}` : '—'}</div>
+        </div>
+      </div>
       {!loading && Array.isArray(items) && items.length === 0 && (
-        <div style={{ marginTop: 12, padding: 12, background: '#fafafa', border: '1px solid #eee' }}>
+        <div className="notice">
           <div style={{ marginBottom: 6 }}><strong>No items found</strong></div>
-          <div style={{ fontSize: 13, color: '#555' }}>
+          <div style={{ fontSize: 13 }}>
             Try adjusting filters (Status = All, clear Search/SKU) or confirm items exist in Zoho {service}.
             {health && (
               <div style={{ marginTop: 6 }}>
@@ -160,12 +185,12 @@ export function App() {
 {JSON.stringify(diag, null, 2)}
         </pre>
       )}
-      <div style={{ marginTop: 8 }}>
-        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
+      <div className="toolbar">
+        <button className="btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
           ‹ Prev
         </button>
         <span style={{ margin: '0 8px' }}>Page {page}</span>
-        <button onClick={() => setPage((p) => p + 1)} disabled={loading || !hasMore}>
+        <button className="btn" onClick={() => setPage((p) => p + 1)} disabled={loading || !hasMore}>
           Next ›
         </button>
       </div>
@@ -183,57 +208,64 @@ export function App() {
           )}
         </div>
       )}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p className="notice error">{error}</p>}
       {Array.isArray(items) && (
-        <table style={{ marginTop: 12, borderCollapse: 'collapse' }}>
+        <div className="tablewrap">
+        <table>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>Name</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>SKU</th>
-              <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>Qty</th>
+              <th>Name</th>
+              <th>SKU</th>
+              <th className="num">Qty</th>
             </tr>
           </thead>
           <tbody>
             {items.map((it: any) => (
               <tr key={it.item_id || it.item_id_string || it.sku}>
-                <td style={{ padding: '4px 8px' }}>{it.name}</td>
-                <td style={{ padding: '4px 8px' }}>{it.sku || it.item_code || '-'}</td>
-                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{(it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '-'}
-                </td>
+                <td>{it.name}</td>
+                <td>{it.sku || it.item_code || '-'}</td>
+                <td className="num">{(it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '-'}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
-
-      <h2 style={{ marginTop: 24 }}>Stockouts KPI</h2>
+      <h2 style={{ marginTop: 24, fontSize: 16, color: 'var(--muted)' }}>Stockouts KPI</h2>
       {kpi ? (
-        <div style={{ marginBottom: 12 }}>
-          <strong>{kpi.stockouts}</strong> stockouts of <strong>{kpi.totalItems}</strong> items (threshold ≤ {kpi.threshold})
+        <div className="card" style={{ marginTop: 8 }}>
+          <div><strong>{kpi.stockouts}</strong> stockouts of <strong>{kpi.totalItems}</strong> items (threshold ≤ {kpi.threshold})</div>
         </div>
       ) : (
-        <div>Loading KPI…</div>
+        <div className="notice">Loading KPI…</div>
       )}
       {sample && sample.length > 0 && (
-        <table style={{ marginTop: 8, borderCollapse: 'collapse' }}>
+        <div className="tablewrap">
+        <table>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>Name</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>SKU</th>
-              <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: '4px 8px' }}>Qty</th>
+              <th>Name</th>
+              <th>SKU</th>
+              <th className="num">Qty</th>
             </tr>
           </thead>
           <tbody>
             {sample.map((it: any, idx: number) => (
               <tr key={it.id || it.sku || idx}>
-                <td style={{ padding: '4px 8px' }}>{it.name}</td>
-                <td style={{ padding: '4px 8px' }}>{it.sku || '-'}</td>
-                <td style={{ padding: '4px 8px', textAlign: 'right' }}>{it.qty ?? '-'}</td>
+                <td>{it.name}</td>
+                <td>{it.sku || '-'}</td>
+                <td className="num">{it.qty ?? '-'}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
+
+      <div className="footer">
+        <div>Service: {envService} • DC: {envDc.toUpperCase()}</div>
+        <div>{buildInfo ? `Build ${buildInfo.slice(0,7)}` : ''}</div>
+      </div>
     </div>
   )
 }
