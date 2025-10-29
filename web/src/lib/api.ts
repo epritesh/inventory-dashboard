@@ -44,6 +44,7 @@ export type ItemQuery = {
   page?: number
   per_page?: number
   service?: 'books' | 'inventory'
+  qty_lte?: number
   // Books filters (allowlist mirrors backend)
   name?: string
   name_startswith?: string

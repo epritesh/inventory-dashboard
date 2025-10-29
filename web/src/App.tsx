@@ -27,14 +27,16 @@ export function App() {
   })
   const [kpiThreshold, setKpiThreshold] = React.useState<number>(0)
   const [selected, setSelected] = React.useState<any | null>(null)
+  const [stockoutsOnly, setStockoutsOnly] = React.useState<boolean>(false)
   const [kpiReorder, setKpiReorder] = React.useState<{ belowReorder: number; totalWithReorder: number; missingReorder: number } | null>(null)
   const [kpiInv, setKpiInv] = React.useState<{ totalValue: number; currency: string | null; itemsWithCost: number; itemsMissingCost: number } | null>(null)
   const [panel, setPanel] = React.useState<'reorder' | 'inv' | null>(null)
   const [panelLoading, setPanelLoading] = React.useState<boolean>(false)
   const [panelItems, setPanelItems] = React.useState<any[] | null>(null)
+  const [panelSort, setPanelSort] = React.useState<{ column?: string; order?: 'A'|'D' }>({})
 
   const openReorder = async () => {
-    setPanel('reorder'); setPanelItems(null); setPanelLoading(true);
+    setPanel('reorder'); setPanelItems(null); setPanelLoading(true); setPanelSort({});
     try {
       const data = await getReorderRisk({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
       setPanelItems(Array.isArray(data?.items) ? data.items : [])
@@ -42,7 +44,7 @@ export function App() {
     finally { setPanelLoading(false) }
   }
   const openInv = async () => {
-    setPanel('inv'); setPanelItems(null); setPanelLoading(true);
+    setPanel('inv'); setPanelItems(null); setPanelLoading(true); setPanelSort({});
     try {
       const data = await getInventoryValue({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
       setPanelItems(Array.isArray(data?.items) ? data.items : [])
@@ -67,7 +69,8 @@ export function App() {
     setLoading(true)
     setError(null)
     try {
-      const params: ItemQuery = { page, per_page: perPage, service }
+  const params: ItemQuery = { page, per_page: perPage, service }
+  if (stockoutsOnly) (params as any).qty_lte = 0
       // For Books, use name_contains for simple free-text search
       if (service === 'books' && search.trim()) params.name_contains = search.trim()
       if (service === 'books' && sku.trim()) params.sku = sku.trim()
@@ -138,7 +141,7 @@ export function App() {
     loadReorder()
     loadInvValue()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, service, sort.column, sort.order])
+  }, [page, perPage, service, sort.column, sort.order, stockoutsOnly])
 
   // Debounce search and SKU changes to auto-apply filters
   React.useEffect(() => {
@@ -169,6 +172,7 @@ export function App() {
         if (typeof f.sku === 'string') setSku(f.sku)
         if (f.sort && (f.sort.column || f.sort.order)) setSort(f.sort)
         if (typeof f.kpiThreshold === 'number') setKpiThreshold(f.kpiThreshold)
+        if (typeof f.stockoutsOnly === 'boolean') setStockoutsOnly(f.stockoutsOnly)
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,10 +181,10 @@ export function App() {
   // Persist filters when they change
   React.useEffect(() => {
     try {
-      const f = { service, status, page, perPage, search, sku, sort, kpiThreshold }
+      const f = { service, status, page, perPage, search, sku, sort, kpiThreshold, stockoutsOnly }
       localStorage.setItem('filters', JSON.stringify(f))
     } catch { /* ignore */ }
-  }, [service, status, page, perPage, search, sku, sort.column, sort.order, kpiThreshold])
+  }, [service, status, page, perPage, search, sku, sort.column, sort.order, kpiThreshold, stockoutsOnly])
 
   // On first load, allow providing the key via URL (?accessKey=... or ?key=...)
   React.useEffect(() => {
@@ -299,6 +303,9 @@ export function App() {
             </select>
           </label>
         )}
+        <label title="Show only items with Qty ≤ 0">
+          <input type="checkbox" checked={stockoutsOnly} onChange={(e) => { setStockoutsOnly(e.target.checked); setPage(1); }} /> Stockouts only
+        </label>
         <button className="btn" onClick={() => { setPage(1); load() }} disabled={loading}>
           {loading ? 'Loading…' : 'Apply'}
         </button>
@@ -532,24 +539,33 @@ export function App() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Name</th>
+                          <th style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'name', order: s.column === 'name' && s.order === 'A' ? 'D' : 'A' }))}>Name {panelSort.column === 'name' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
                           <th>SKU</th>
-                          <th className="num">Qty</th>
+                          <th className="num" style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'qty', order: s.column === 'qty' && s.order === 'A' ? 'D' : 'A' }))}>Qty {panelSort.column === 'qty' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
                           {panel === 'reorder' ? (
                             <>
-                              <th className="num">Reorder</th>
-                              <th className="num">Variance</th>
+                              <th className="num" style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'reorder_level', order: s.column === 'reorder_level' && s.order === 'A' ? 'D' : 'A' }))}>Reorder {panelSort.column === 'reorder_level' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
+                              <th className="num" style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'variance', order: s.column === 'variance' && s.order === 'A' ? 'D' : 'A' }))}>Variance {panelSort.column === 'variance' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
                             </>
                           ) : (
                             <>
-                              <th className="num">Cost</th>
-                              <th className="num">Value</th>
+                              <th className="num" style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'cost', order: s.column === 'cost' && s.order === 'A' ? 'D' : 'A' }))}>Cost {panelSort.column === 'cost' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
+                              <th className="num" style={{ cursor: 'pointer' }} onClick={() => setPanelSort((s) => ({ column: 'value', order: s.column === 'value' && s.order === 'A' ? 'D' : 'A' }))}>Value {panelSort.column === 'value' ? (panelSort.order === 'A' ? '▲' : '▼') : ''}</th>
                             </>
                           )}
                         </tr>
                       </thead>
                       <tbody>
-                        {panelItems.map((it: any, idx: number) => (
+                        {(panelItems ? [...panelItems] : []).sort((a: any, b: any) => {
+                          const col = panelSort.column
+                          if (!col) return 0
+                          const av = (a as any)[col]
+                          const bv = (b as any)[col]
+                          const na = typeof av === 'number' ? av : String(av || '').toLowerCase()
+                          const nb = typeof bv === 'number' ? bv : String(bv || '').toLowerCase()
+                          const cmp = (typeof na === 'number' && typeof nb === 'number') ? (na - nb) : (na < nb ? -1 : na > nb ? 1 : 0)
+                          return panelSort.order === 'D' ? -cmp : cmp
+                        }).map((it: any, idx: number) => (
                           <tr key={it.id || it.sku || idx}>
                             <td>{it.name}</td>
                             <td>{it.sku || '-'}</td>

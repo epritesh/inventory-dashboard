@@ -81,6 +81,7 @@ async function handler(req, res) {
             const per_page = query?.per_page ? Number(query.per_page) : undefined;
             const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
             const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
+            const qtyLte = (query?.qty_lte != null) ? Number(query.qty_lte) : undefined;
             // Allowlist of Books query params to pass through
             const booksAllowed = new Set(['name','name_startswith','name_contains','description','description_startswith','description_contains','rate','rate_less_than','rate_less_equals','rate_greater_than','rate_greater_equals','tax_id','tax_name','is_taxable','tax_exemption_id','account_id','filter_by','sort_column','sort_order','status','sku','product_type']);
             const extraParams = {};
@@ -155,7 +156,10 @@ async function handler(req, res) {
             
             const itemsArr = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
             const businessFilteredItems = applyBusinessFilter(itemsArr);
-            const normalizedItems = businessFilteredItems.map((it) => Object.assign({}, it, { qty: getQty(it), sku: getSku(it) }));
+            let normalizedItems = businessFilteredItems.map((it) => Object.assign({}, it, { qty: getQty(it), sku: getSku(it) }));
+            if (typeof qtyLte === 'number' && !Number.isNaN(qtyLte)) {
+                normalizedItems = normalizedItems.filter(it => (typeof it.qty === 'number' ? it.qty : 0) <= qtyLte);
+            }
             const pc = data?.page_context;
             const summary = {
                 page: Number((pc?.page ?? page ?? 1)),
