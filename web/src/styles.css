@@ -34,8 +34,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
-.card.clickable { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease, transform .06s ease; }
-.card.clickable:hover { border-color: rgba(255,255,255,0.18); box-shadow: 0 6px 18px rgba(0,0,0,0.25); transform: translateY(-1px); }
+.card.clickable { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease, transform .08s ease; }
+.card.clickable:hover { border-color: rgba(249,149,0,0.7); box-shadow: 0 10px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(249,149,0,0.35); transform: translateY(-2px); }
+.card.clickable:focus-visible { outline: none; border-color: rgba(249,149,0,0.8); box-shadow: 0 10px 24px rgba(0,0,0,0.35), 0 0 0 2px rgba(249,149,0,0.45); transform: translateY(-2px); }
 .card .card-actions { margin-top: 6px; }
 .card .label { color: var(--muted); font-size: 12px; }
 .card .value { font-size: 24px; font-weight: 700; margin-top: 6px; }
