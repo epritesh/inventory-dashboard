@@ -201,6 +201,8 @@ async function handler(req, res) {
             }
             const maxPages = query?.max_pages ? Number(query.max_pages) : 5;
             const perPage = query?.per_page ? Number(query.per_page) : 200;
+            const includeItems = (query?.include === 'items' || query?.detail === '1' || query?.detail === 'true');
+            const limit = query?.limit ? Math.max(1, Math.min(2000, Number(query.limit))) : 1000;
             const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
             const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
             const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
@@ -257,6 +259,7 @@ async function handler(req, res) {
             const filtered = applyBusinessFilter(allItems);
             let below = 0, withReorder = 0, missingReorder = 0;
             const sample = [];
+            const detailItems = [];
             for (const it of filtered) {
                 const r = getReorder(it);
                 if (typeof r === 'number' && r >= 0) {
@@ -266,6 +269,16 @@ async function handler(req, res) {
                         below++;
                         if (sample.length < 10) {
                             sample.push({
+                                id: it.item_id || it.item_id_string || undefined,
+                                name: it.name,
+                                sku: getSku(it) || undefined,
+                                qty: q,
+                                reorder_level: r,
+                                variance: (r - q)
+                            });
+                        }
+                        if (includeItems && detailItems.length < limit) {
+                            detailItems.push({
                                 id: it.item_id || it.item_id_string || undefined,
                                 name: it.name,
                                 sku: getSku(it) || undefined,
@@ -287,6 +300,7 @@ async function handler(req, res) {
                 },
                 sample
             };
+            if (includeItems) body.items = detailItems;
             if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
                 body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries };
             }
@@ -306,6 +320,8 @@ async function handler(req, res) {
             }
             const maxPages = query?.max_pages ? Number(query.max_pages) : 5;
             const perPage = query?.per_page ? Number(query.per_page) : 200;
+            const includeItems = (query?.include === 'items' || query?.detail === '1' || query?.detail === 'true');
+            const limit = query?.limit ? Math.max(1, Math.min(2000, Number(query.limit))) : 1000;
             const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
             const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
             const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
@@ -368,6 +384,7 @@ async function handler(req, res) {
             let missingCost = 0;
             let currency = undefined;
             const sample = [];
+            const detailItems = [];
             for (const it of filtered) {
                 const qty = getQty(it);
                 const cost = getCost(it);
@@ -386,11 +403,23 @@ async function handler(req, res) {
                             value: val
                         });
                     }
+                    if (includeItems && detailItems.length < limit) {
+                        detailItems.push({
+                            id: it.item_id || it.item_id_string || undefined,
+                            name: it.name,
+                            sku: getSku(it) || undefined,
+                            qty,
+                            cost,
+                            value: val
+                        });
+                    }
                 } else {
                     missingCost++;
                 }
             }
             const defaultCurrency = process.env.DEFAULT_CURRENCY || 'CRC';
+            // Sort detail by value desc if present
+            if (includeItems) detailItems.sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
             const body = {
                 kpi: {
                     totalValue,
@@ -400,6 +429,7 @@ async function handler(req, res) {
                 },
                 sample
             };
+            if (includeItems) body.items = detailItems;
             if (debugRequested && (process.env.DEBUG_AUTH === '1')) {
                 body.diag = { service, per_page: perPage, max_pages: maxPages, pagesFetched: pageSummaries.length, pageSummaries, resolvedCurrency: body.kpi.currency };
             }

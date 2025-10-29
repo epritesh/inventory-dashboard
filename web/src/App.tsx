@@ -29,6 +29,9 @@ export function App() {
   const [selected, setSelected] = React.useState<any | null>(null)
   const [kpiReorder, setKpiReorder] = React.useState<{ belowReorder: number; totalWithReorder: number; missingReorder: number } | null>(null)
   const [kpiInv, setKpiInv] = React.useState<{ totalValue: number; currency: string | null; itemsWithCost: number; itemsMissingCost: number } | null>(null)
+  const [panel, setPanel] = React.useState<'reorder' | 'inv' | null>(null)
+  const [panelLoading, setPanelLoading] = React.useState<boolean>(false)
+  const [panelItems, setPanelItems] = React.useState<any[] | null>(null)
 
   const clearKey = () => {
     try { localStorage.removeItem('accessKey') } catch {}
@@ -313,11 +316,25 @@ export function App() {
           <div className="label">Threshold</div>
           <div className="value">{kpi ? `≤ ${kpi.threshold}` : '—'}</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ cursor: 'pointer' }} title="View items below reorder level" onClick={async () => {
+          setPanel('reorder'); setPanelItems(null); setPanelLoading(true);
+          try {
+            const data = await getReorderRisk({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
+            setPanelItems(Array.isArray(data?.items) ? data.items : [])
+          } catch {}
+          finally { setPanelLoading(false) }
+        }}>
           <div className="label">Below Reorder Level</div>
           <div className="value">{kpiReorder ? kpiReorder.belowReorder : '—'}</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ cursor: 'pointer' }} title="View inventory value by item" onClick={async () => {
+          setPanel('inv'); setPanelItems(null); setPanelLoading(true);
+          try {
+            const data = await getInventoryValue({ include: 'items', per_page: 200, max_pages: 5, limit: 1000 })
+            setPanelItems(Array.isArray(data?.items) ? data.items : [])
+          } catch {}
+          finally { setPanelLoading(false) }
+        }}>
           <div className="label">Inventory Value (On Hand)</div>
           <div className="value">{kpiInv ? fmtMoney(kpiInv.totalValue, kpiInv.currency || undefined) : '—'}</div>
         </div>
@@ -462,6 +479,88 @@ export function App() {
             ))}
           </tbody>
         </table>
+        </div>
+      )}
+
+      {panel && (
+        <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) { setPanel(null); setPanelItems(null); } }}>
+          <div className="sheet" role="dialog" aria-modal="true">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700 }}>{panel === 'reorder' ? 'Items Below Reorder Level' : 'Inventory Value by Item'}</div>
+              <button className="link" onClick={() => { setPanel(null); setPanelItems(null); }}>Close</button>
+            </div>
+            {panelLoading ? (
+              <div style={{ marginTop: 12 }}>Loading…</div>
+            ) : Array.isArray(panelItems) ? (
+              panelItems.length > 0 ? (
+                <>
+                  <div className="toolbar" style={{ marginTop: 8 }}>
+                    <button className="link" onClick={() => {
+                      try {
+                        const hdr = panel === 'reorder' ? ['name','sku','qty','reorder_level','variance'] : ['name','sku','qty','cost','value']
+                        const csv = [hdr.join(','), ...panelItems.map((r: any) => hdr.map(h => (`"${String((r as any)[h] ?? '').replace(/"/g,'""')}"`)).join(','))].join('\n')
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = panel === 'reorder' ? 'reorder-risk.csv' : 'inventory-value.csv'
+                        document.body.appendChild(a)
+                        a.click()
+                        a.remove()
+                        URL.revokeObjectURL(url)
+                      } catch {}
+                    }}>Export CSV</button>
+                  </div>
+                  <div className="tablewrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>SKU</th>
+                          <th className="num">Qty</th>
+                          {panel === 'reorder' ? (
+                            <>
+                              <th className="num">Reorder</th>
+                              <th className="num">Variance</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="num">Cost</th>
+                              <th className="num">Value</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {panelItems.map((it: any, idx: number) => (
+                          <tr key={it.id || it.sku || idx}>
+                            <td>{it.name}</td>
+                            <td>{it.sku || '-'}</td>
+                            <td className="num">{it.qty ?? '-'}</td>
+                            {panel === 'reorder' ? (
+                              <>
+                                <td className="num">{it.reorder_level ?? '-'}</td>
+                                <td className="num">{it.variance ?? '-'}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="num">{typeof it.cost === 'number' ? fmtMoney(it.cost, kpiInv?.currency || undefined) : '-'}</td>
+                                <td className="num">{typeof it.value === 'number' ? fmtMoney(it.value, kpiInv?.currency || undefined) : '-'}</td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div style={{ marginTop: 12, color: 'var(--muted)' }}>No data available.</div>
+              )
+            ) : (
+              <div style={{ marginTop: 12, color: 'var(--muted)' }}>No data.</div>
+            )}
+          </div>
         </div>
       )}
 
