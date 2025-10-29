@@ -80,12 +80,17 @@ export async function listItems(params: ItemQuery = {}) {
   return http(pathFor(`/items${q ? `?${q}` : ''}`))
 }
 
-export async function getStockouts(params: { threshold?: number; per_page?: number; max_pages?: number } = {}) {
+export async function getStockouts(params: { threshold?: number; per_page?: number; max_pages?: number; service?: 'books' | 'inventory'; debug?: boolean } = {}) {
   const p = new URLSearchParams()
   if (params.threshold != null) p.set('threshold', String(params.threshold))
   if (params.per_page) p.set('per_page', String(params.per_page))
   if (params.max_pages) p.set('max_pages', String(params.max_pages))
-  if (!(import.meta as any).env?.VITE_ZOHO_SERVICE) p.set('service', 'books')
+  if (params.service) {
+    p.set('service', params.service)
+  } else if (!(import.meta as any).env?.VITE_ZOHO_SERVICE) {
+    p.set('service', 'books')
+  }
+  if (params.debug) p.set('debug', '1')
   const q = p.toString()
   return http(pathFor(`/metrics/stockouts${q ? `?${q}` : ''}`))
 }

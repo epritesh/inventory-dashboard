@@ -120,7 +120,7 @@ export function App() {
 
   const loadKpi = async () => {
     try {
-      const data = await getStockouts({ threshold: 0, per_page: 200, max_pages: 3 })
+      const data = await getStockouts({ threshold: 0, per_page: 200, max_pages: 3, service, debug })
       setKpi(data?.kpi ?? null)
       setSample(data?.sample ?? null)
     } catch (e: any) {
@@ -560,7 +560,7 @@ export function App() {
           KPI threshold:
           <input type="number" value={kpiThreshold} onChange={(e) => setKpiThreshold(Number(e.target.value || 0))} style={{ width: 80 }} />
         </label>
-        <button className="btn" onClick={() => { getStockouts({ threshold: kpiThreshold, per_page: 200, max_pages: 3 }).then((data) => { setKpi(data?.kpi ?? null); setSample(data?.sample ?? null) }).catch(() => {}) }}>Update KPI</button>
+  <button className="btn" onClick={() => { getStockouts({ threshold: kpiThreshold, per_page: 200, max_pages: 3, service, debug }).then((data) => { setKpi(data?.kpi ?? null); setSample(data?.sample ?? null) }).catch(() => {}) }}>Update KPI</button>
       </div>
       {kpi ? (
         <div className="card" style={{ marginTop: 8 }}>
