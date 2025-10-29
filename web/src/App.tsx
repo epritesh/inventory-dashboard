@@ -1,5 +1,6 @@
 import React from 'react'
-import { listItems, getStockouts, getHealth, getReorderRisk, getInventoryValue, type ItemQuery } from './lib/api'
+import Sparkline from './components/Sparkline'
+import { listItems, getStockouts, getHealth, getReorderRisk, getInventoryValue, getTrends, type ItemQuery } from './lib/api'
 
 export function App() {
   const [items, setItems] = React.useState<any[] | null>(null)
@@ -35,6 +36,14 @@ export function App() {
   const [panelItems, setPanelItems] = React.useState<any[] | null>(null)
   const [panelSort, setPanelSort] = React.useState<{ column?: string; order?: 'A'|'D' }>({})
   const [debouncing, setDebouncing] = React.useState<boolean>(false)
+  const [views, setViews] = React.useState<Record<string, any>>(() => {
+    try { return JSON.parse(localStorage.getItem('views') || '{}') } catch { return {} }
+  })
+  const [viewName, setViewName] = React.useState<string>('')
+  const [columns, setColumns] = React.useState<{ rate: boolean; cost: boolean; value: boolean }>(() => {
+    try { return JSON.parse(localStorage.getItem('columns') || '{"rate":false,"cost":true,"value":true}') } catch { return { rate: false, cost: true, value: true } }
+  })
+  const [trends, setTrends] = React.useState<{ stockouts: Array<{ date: string; value: number }>; inventoryValue: Array<{ date: string; value: number }>; currency?: string } | null>(null)
 
   const openReorder = async () => {
     setPanel('reorder'); setPanelItems(null); setPanelLoading(true); setPanelSort({});
@@ -161,6 +170,11 @@ export function App() {
   }
   React.useEffect(() => { loadHealth() }, [])
 
+  const loadTrends = async () => {
+    try { const t = await getTrends(); setTrends(t) } catch { /* ignore */ }
+  }
+  React.useEffect(() => { loadTrends() }, [])
+
   // Restore filters from localStorage on first mount
   React.useEffect(() => {
     try {
@@ -186,8 +200,9 @@ export function App() {
     try {
       const f = { service, status, page, perPage, search, sku, sort, kpiThreshold, stockoutsOnly }
       localStorage.setItem('filters', JSON.stringify(f))
+      localStorage.setItem('columns', JSON.stringify(columns))
     } catch { /* ignore */ }
-  }, [service, status, page, perPage, search, sku, sort.column, sort.order, kpiThreshold, stockoutsOnly])
+  }, [service, status, page, perPage, search, sku, sort.column, sort.order, kpiThreshold, stockoutsOnly, columns])
 
   // On first load, allow providing the key via URL (?accessKey=... or ?key=...)
   React.useEffect(() => {
@@ -240,6 +255,7 @@ export function App() {
 
   return (
     <div className="container">
+      {(loading || debouncing || panelLoading) && <div className="topbar"><div className="bar" /></div>}
       <div className="header">
         <div className="title">
           <img className="logo" src="/logo.png" alt="Pantera" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
@@ -315,6 +331,49 @@ export function App() {
           {loading ? 'Loading…' : 'Apply'}
         </button>
         <button className="link" onClick={resetFilters} title="Clear filters and show defaults">Reset filters</button>
+        <details>
+          <summary style={{ cursor: 'pointer' }}>Columns</summary>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <label><input type="checkbox" checked={columns.rate} onChange={(e) => setColumns(c => ({ ...c, rate: e.target.checked }))} /> Rate (main)</label>
+            <label><input type="checkbox" checked={columns.cost} onChange={(e) => setColumns(c => ({ ...c, cost: e.target.checked }))} /> Cost (inv)</label>
+            <label><input type="checkbox" checked={columns.value} onChange={(e) => setColumns(c => ({ ...c, value: e.target.checked }))} /> Value (inv)</label>
+          </div>
+        </details>
+        <details>
+          <summary style={{ cursor: 'pointer' }}>Saved views</summary>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+            <select value="" onChange={(e) => {
+              const name = e.target.value; if (!name) return;
+              const v = (views as any)[name]; if (!v) return;
+              // Apply filters from view
+              if (v.service) setService(v.service)
+              if (v.status) setStatus(v.status)
+              if (typeof v.perPage === 'number') setPerPage(v.perPage)
+              if (typeof v.search === 'string') setSearch(v.search)
+              if (typeof v.sku === 'string') setSku(v.sku)
+              if (v.sort) setSort(v.sort)
+              if (typeof v.kpiThreshold === 'number') setKpiThreshold(v.kpiThreshold)
+              if (typeof v.stockoutsOnly === 'boolean') setStockoutsOnly(v.stockoutsOnly)
+              setPage(1); load()
+            }}>
+              <option value="">(select a view)</option>
+              {Object.keys(views).map(n => (<option key={n} value={n}>{n}</option>))}
+            </select>
+            <input placeholder="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} />
+            <button className="link" onClick={() => {
+              const name = viewName.trim(); if (!name) return;
+              const v = { service, status, perPage, search, sku, sort, kpiThreshold, stockoutsOnly }
+              const next = { ...views, [name]: v } as any
+              setViews(next)
+              try { localStorage.setItem('views', JSON.stringify(next)) } catch {}
+            }}>Save</button>
+            <button className="link" onClick={() => {
+              const name = viewName.trim(); if (!name) return;
+              const next = { ...views } as any; delete next[name]; setViews(next)
+              try { localStorage.setItem('views', JSON.stringify(next)) } catch {}
+            }}>Delete</button>
+          </div>
+        </details>
         <label>
           Debug:
           <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
@@ -336,6 +395,11 @@ export function App() {
         <div className="card">
           <div className="label">Stockouts</div>
           <div className="value">{kpi ? kpi.stockouts : '—'}</div>
+          {trends && trends.stockouts?.length > 1 && (
+            <div style={{ marginTop: 6 }}>
+              <Sparkline data={trends.stockouts.slice(-20)} width={140} height={28} ariaLabel="Stockouts trend" />
+            </div>
+          )}
         </div>
         <div className="card">
           <div className="label">Total Items (scanned)</div>
@@ -363,6 +427,11 @@ export function App() {
           <div className="card-actions"><button className="link small" onClick={(e) => { e.stopPropagation(); openInv(); }}>View details ›</button></div>
           {kpiInv && kpiInv.itemsMissingCost > 0 && (
             <div className="card-actions"><span className="badge warn" title="Items missing cost; value excludes these">{kpiInv.itemsMissingCost} missing cost</span></div>
+          )}
+          {trends && trends.inventoryValue?.length > 1 && (
+            <div style={{ marginTop: 6 }}>
+              <Sparkline data={trends.inventoryValue.slice(-20)} width={140} height={28} ariaLabel="Inventory value trend" />
+            </div>
           )}
         </div>
       </div>
@@ -422,6 +491,7 @@ export function App() {
             <tr>
               <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'name', order: s.column === 'name' && s.order === 'A' ? 'D' : 'A' }))}>Name {sort.column === 'name' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
               <th style={{ cursor: 'pointer' }} onClick={() => setSort((s) => ({ column: 'sku', order: s.column === 'sku' && s.order === 'A' ? 'D' : 'A' }))}>SKU {sort.column === 'sku' ? (sort.order === 'A' ? '▲' : '▼') : ''}</th>
+              {columns.rate && <th className="num">Rate</th>}
               <th className="num">Qty</th>
               <th className="num">Details</th>
             </tr>
@@ -432,6 +502,7 @@ export function App() {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(it) } }}>
                 <td>{it.name}</td>
                 <td>{it.sku || it.item_code || '-'}</td>
+                {columns.rate && <td className="num">{typeof it.rate === 'number' ? fmtMoney(it.rate, kpiInv?.currency || undefined) : '-'}</td>}
                 <td className="num">{(it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '-'}</td>
                 <td className="num actions">
                   <button className="link small" aria-label={`View details for ${it.name}`} onClick={(e) => { e.stopPropagation(); setSelected(it) }}>View</button>
@@ -440,6 +511,10 @@ export function App() {
             ))}
           </tbody>
         </table>
+        </div>
+        {/* Current page totals */}
+        <div className="toolbar">
+          <span style={{ color: 'var(--muted)', fontSize: 12 }}>Page total Qty: <strong>{items.reduce((s: number, it: any) => s + (Number(((it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity) || 0) || 0), 0).toLocaleString()}</strong></span>
         </div>
         </>
       )}
@@ -597,6 +672,9 @@ export function App() {
                       </tbody>
                     </table>
                   </div>
+                  {panel === 'inv' && (
+                    <div className="toolbar"><span style={{ color: 'var(--muted)', fontSize: 12 }}>Top {panelItems.length} total value: <strong>{fmtMoney(panelItems.reduce((s: number, it: any) => s + (Number(it.value || 0) || 0), 0), kpiInv?.currency || undefined)}</strong></span></div>
+                  )}
                 </>
               ) : (
                 <div style={{ marginTop: 12, color: 'var(--muted)' }}>No data available.</div>

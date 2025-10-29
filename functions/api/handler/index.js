@@ -69,6 +69,26 @@ async function handler(req, res) {
             }));
             return;
         }
+        if (req.method === 'GET' && pathname === '/api/metrics/trends') {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const file = path.join(__dirname, 'data', 'snapshots.json');
+                let payload = { stockouts: [], inventoryValue: [], currency: process.env.DEFAULT_CURRENCY || 'CRC' };
+                if (fs.existsSync(file)) {
+                    const raw = fs.readFileSync(file, 'utf-8');
+                    const data = JSON.parse(raw);
+                    if (data && typeof data === 'object') payload = Object.assign(payload, data);
+                }
+                res.writeHead?.(200, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify(payload));
+                return;
+            } catch (e) {
+                res.writeHead?.(200, { 'content-type': 'application/json' });
+                res.end?.(JSON.stringify({ stockouts: [], inventoryValue: [], currency: process.env.DEFAULT_CURRENCY || 'CRC' }));
+                return;
+            }
+        }
         if (req.method === 'GET' && pathname === '/api/items') {
             const required = ['ZOHO_ORG_ID','ZOHO_CLIENT_ID','ZOHO_CLIENT_SECRET','ZOHO_REFRESH_TOKEN'];
             const missingEnv = required.filter(k => !process.env[k]);

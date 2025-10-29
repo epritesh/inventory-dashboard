@@ -13,6 +13,11 @@
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
 
+/* Top refreshing bar */
+.topbar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: transparent; z-index: 100; }
+.topbar .bar { height: 100%; width: 100%; background: linear-gradient(90deg, rgba(249,149,0,0.1) 0%, rgba(249,149,0,0.9) 50%, rgba(249,149,0,0.1) 100%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+
 .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .link { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; }

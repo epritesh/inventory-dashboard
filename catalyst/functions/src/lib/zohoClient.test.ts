@@ -22,6 +22,8 @@ describe('ZohoClient', () => {
   beforeEach(() => {
     jest.resetAllMocks()
     ;(axios.create as unknown as jest.Mock) = jest.fn()
+    // Ensure token cache is cleared between tests to avoid cross-test pollution
+    ;(ZohoClient as any).resetTokenCacheForTests?.()
   })
 
   it('mints token via refresh_token and lists items', async () => {

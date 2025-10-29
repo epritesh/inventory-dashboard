@@ -115,3 +115,7 @@ export async function getInventoryValue(params: { per_page?: number; max_pages?:
   const q = p.toString()
   return http(pathFor(`/metrics/inventory-value${q ? `?${q}` : ''}`))
 }
+
+export async function getTrends() {
+  return http(pathFor(`/metrics/trends`))
+}

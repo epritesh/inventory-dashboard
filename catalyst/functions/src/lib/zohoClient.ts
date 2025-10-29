@@ -72,6 +72,14 @@ export class ZohoClient {
     this.tokenCacheKey = `${this.dc}:${this.clientId}:${this.orgId}`
   }
 
+  // Test-only helper to clear global caches between tests
+  static resetTokenCacheForTests() {
+    try {
+      ZohoClient.globalTokenCache.clear()
+      ZohoClient.globalTokenRefreshing.clear()
+    } catch { /* noop */ }
+  }
+
   private async getAccessToken(): Promise<string> {
     const now = Date.now() / 1000
     const cached = ZohoClient.globalTokenCache.get(this.tokenCacheKey)
