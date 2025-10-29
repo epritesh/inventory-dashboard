@@ -160,6 +160,17 @@ export function App() {
   const envDc = health?.dc || 'us'
   const buildInfo = (import.meta as any).env?.VITE_GIT_SHA || ''
 
+  const resetFilters = () => {
+    setSearch('')
+    setSku('')
+    setSort({})
+    setStatus('All')
+    setPerPage(100)
+    setPage(1)
+    // keep current service selection
+    load()
+  }
+
   return (
     <div className="container">
       <div className="header">
@@ -231,6 +242,7 @@ export function App() {
         <button className="btn" onClick={() => { setPage(1); load() }} disabled={loading}>
           {loading ? 'Loading…' : 'Apply'}
         </button>
+        <button className="link" onClick={resetFilters} title="Clear filters and show defaults">Reset filters</button>
         <label>
           Debug:
           <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
