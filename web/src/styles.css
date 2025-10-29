@@ -28,6 +28,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 .controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .controls input, .controls select { background: #0c1326; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
 .btn { background: var(--brand); color: white; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.05); }
 .btn[disabled] { opacity: .6; cursor: default; }
 
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
