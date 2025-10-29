@@ -1,3 +1,9 @@
+function pathFor(p: string) {
+  const base = (import.meta as any).env?.VITE_API_BASE as string | undefined
+  // If base is provided (cloud), don't prefix with /api. In dev, use /api to hit the proxy.
+  return base ? (p.startsWith('/') ? p : `/${p}`) : (`/api${p.startsWith('/') ? p : `/${p}`}`)
+}
+
 async function http(path: string, init?: RequestInit) {
   // If VITE_API_BASE is set, it should point to the Catalyst function base, typically ending with '/server/api'.
   // In that case, don't duplicate the '/api' segment from callers; strip a leading '/api' from the provided path.
@@ -61,7 +67,7 @@ export async function listItems(params: ItemQuery = {}) {
   }
   if (!p.has('service')) p.set('service', ((import.meta as any).env?.VITE_ZOHO_SERVICE as string) || 'books')
   const q = p.toString()
-  return http(`/api/items${q ? `?${q}` : ''}`)
+  return http(pathFor(`/items${q ? `?${q}` : ''}`))
 }
 
 export async function getStockouts(params: { threshold?: number; per_page?: number; max_pages?: number } = {}) {
@@ -71,9 +77,9 @@ export async function getStockouts(params: { threshold?: number; per_page?: numb
   if (params.max_pages) p.set('max_pages', String(params.max_pages))
   if (!(import.meta as any).env?.VITE_ZOHO_SERVICE) p.set('service', 'books')
   const q = p.toString()
-  return http(`/api/metrics/stockouts${q ? `?${q}` : ''}`)
+  return http(pathFor(`/metrics/stockouts${q ? `?${q}` : ''}`))
 }
 
 export async function getHealth() {
-  return http(`/api/health`)
+  return http(pathFor(`/health`))
 }
