@@ -3,7 +3,7 @@
   --panel: #121a2e;
   --muted: #8aa0b6;
   --text: #eaf2ff;
-  --brand: #4f8cff;
+  --brand: #f99500;
   --ok: #16a34a;
   --warn: #f59e0b;
   --err: #ef4444;
@@ -15,7 +15,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 
 .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.title { font-size: 22px; font-weight: 650; letter-spacing: .2px; }
+.title { font-size: 22px; font-weight: 650; letter-spacing: .2px; display: inline-flex; align-items: center; gap: 10px; }
+.title .logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; box-shadow: 0 0 0 2px rgba(0,0,0,0.3); }
+.title .brand { color: var(--brand); }
 .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0e1730; color: var(--muted); }
 .badge.ok { color: #baf7ce; border-color: rgba(22,163,74,.3); background: rgba(22,163,74,.08); }
 .badge.err { color: #ffd1cf; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }

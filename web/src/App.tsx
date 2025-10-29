@@ -87,7 +87,10 @@ export function App() {
   return (
     <div className="container">
       <div className="header">
-        <div className="title">Inventory Dashboard</div>
+        <div className="title">
+          <img className="logo" src="/logo.png" alt="Pantera" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+          <span className="brand">Inventory</span> Dashboard
+        </div>
         <div className={`badge ${online ? 'ok' : 'err'}`}>
           {online ? 'Online' : 'Offline'} • {envService} • {envDc.toUpperCase()}
         </div>
