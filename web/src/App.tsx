@@ -26,6 +26,7 @@ export function App() {
     try { return !!localStorage.getItem('accessKey') } catch { return false }
   })
   const [kpiThreshold, setKpiThreshold] = React.useState<number>(0)
+  const [selected, setSelected] = React.useState<any | null>(null)
 
   const clearKey = () => {
     try { localStorage.removeItem('accessKey') } catch {}
@@ -98,6 +99,16 @@ export function App() {
     loadKpi()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, service, sort.column, sort.order])
+
+  // Debounce search and SKU changes to auto-apply filters
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1)
+      load()
+    }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, sku])
 
   const loadHealth = async () => {
     try { const h = await getHealth(); setHealth(h) } catch { /* ignore */ }
@@ -333,7 +344,7 @@ export function App() {
           </thead>
           <tbody>
             {items.map((it: any) => (
-              <tr key={it.item_id || it.item_id_string || it.sku}>
+              <tr key={it.item_id || it.item_id_string || it.sku} onClick={() => setSelected(it)} style={{ cursor: 'pointer' }}>
                 <td>{it.name}</td>
                 <td>{it.sku || it.item_code || '-'}</td>
                 <td className="num">{(it as any).qty ?? it.stock_on_hand ?? it.available_stock ?? it.quantity ?? '-'}</td>
@@ -341,6 +352,22 @@ export function App() {
             ))}
           </tbody>
         </table>
+        </div>
+      )}
+      {selected && (
+        <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null) }}>
+          <div className="sheet" role="dialog" aria-modal="true">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700 }}>{selected.name}</div>
+              <button className="link" onClick={() => setSelected(null)}>Close</button>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 14 }}>
+              <div><strong>SKU:</strong> {selected.sku || selected.item_code || '-'}</div>
+              <div><strong>Qty:</strong> {(selected as any).qty ?? selected.stock_on_hand ?? selected.available_stock ?? selected.quantity ?? '-'}</div>
+              {selected.rate != null && <div><strong>Rate:</strong> {selected.rate}</div>}
+              {selected.description && <div style={{ marginTop: 6 }}><strong>Description:</strong> {selected.description}</div>}
+            </div>
+          </div>
         </div>
       )}
       {Array.isArray(items) && items.length > 0 && (

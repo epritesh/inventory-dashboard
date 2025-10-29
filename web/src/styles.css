@@ -53,3 +53,7 @@ td.num { text-align: right; }
 @media (max-width: 800px) {
   .cards { grid-template-columns: 1fr; }
 }
+
+/* Overlay and sheet for item details */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+.sheet { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; width: min(560px, 95vw); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
