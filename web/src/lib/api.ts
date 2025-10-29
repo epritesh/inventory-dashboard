@@ -80,7 +80,7 @@ export async function listItems(params: ItemQuery = {}) {
   return http(pathFor(`/items${q ? `?${q}` : ''}`))
 }
 
-export async function getStockouts(params: { threshold?: number; per_page?: number; max_pages?: number; service?: 'books' | 'inventory'; debug?: boolean } = {}) {
+export async function getStockouts(params: { threshold?: number; per_page?: number; max_pages?: number; service?: 'books' | 'inventory'; debug?: boolean; name_contains?: string; sku?: string; filter_by?: string } = {}) {
   const p = new URLSearchParams()
   if (params.threshold != null) p.set('threshold', String(params.threshold))
   if (params.per_page) p.set('per_page', String(params.per_page))
@@ -91,6 +91,9 @@ export async function getStockouts(params: { threshold?: number; per_page?: numb
     p.set('service', 'books')
   }
   if (params.debug) p.set('debug', '1')
+  if (params.name_contains) p.set('name_contains', params.name_contains)
+  if (params.sku) p.set('sku', params.sku)
+  if (params.filter_by) p.set('filter_by', params.filter_by)
   const q = p.toString()
   return http(pathFor(`/metrics/stockouts${q ? `?${q}` : ''}`))
 }

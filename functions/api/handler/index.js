@@ -475,10 +475,20 @@ async function handler(req, res) {
             const perPage = query?.per_page ? Number(query.per_page) : 200;
             const qService = typeof query?.service === 'string' ? query.service.toLowerCase() : undefined;
             const service = (qService === 'books' || qService === 'inventory') ? qService : (process.env.ZOHO_SERVICE || 'books');
+            // Allow passing a subset of Books filters so KPI mirrors current table filters
+            const booksAllowed = new Set(['name','name_startswith','name_contains','description','description_startswith','description_contains','rate','rate_less_than','rate_less_equals','rate_greater_than','rate_greater_equals','tax_id','tax_name','is_taxable','tax_exemption_id','account_id','filter_by','sort_column','sort_order','status','sku','product_type']);
+            const extraParams = {};
+            if (service === 'books' && query) {
+                for (const [k, v] of Object.entries(query)) {
+                    if (v == null) continue;
+                    if (k === 'page' || k === 'per_page' || k === 'service' || k === 'max_pages' || k === 'threshold' || k === 'debug') continue;
+                    if (booksAllowed.has(k)) extraParams[k] = v;
+                }
+            }
             const ttl = Number(process.env.CACHE_TTL_SECONDS || '300');
             const debugRequested = query?.debug === '1' || query?.debug === 'true';
             const useCache = ttl > 0 && !debugRequested;
-            const cacheKey = `stockouts:${service}:${process.env.ZOHO_ORG_ID}:${threshold}:${maxPages}:${perPage}`;
+            const cacheKey = `stockouts:${service}:${process.env.ZOHO_ORG_ID}:${threshold}:${maxPages}:${perPage}:${JSON.stringify(extraParams)}`;
             if (useCache) {
                 const cached = cacheGet(cacheKey);
                 if (cached) {
@@ -499,7 +509,7 @@ async function handler(req, res) {
             let allItems = [];
             const pageSummaries = [];
             for (let page = 1; page <= maxPages; page++) {
-                const data = await client.listItems({ page, per_page: perPage });
+                const data = await client.listItems(Object.assign({ page, per_page: perPage }, extraParams));
                 const items = data?.items || data || [];
                 allItems = allItems.concat(items);
                 const pc = data?.page_context;
@@ -544,7 +554,8 @@ async function handler(req, res) {
                     per_page: perPage,
                     max_pages: maxPages,
                     pagesFetched: pageSummaries.length,
-                    pageSummaries
+                    pageSummaries,
+                    extraParams
                 };
             }
             if (useCache)
