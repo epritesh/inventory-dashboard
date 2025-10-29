@@ -146,7 +146,7 @@ export function App() {
           {hasKey ? (
             <>
               <span className="badge" title="A stored access key will be used for API calls">Key set</span>
-              <button className="link" onClick={clearKey}>Clear</button>
+              <button className="link" title="Remove the stored access key" onClick={() => { if (window.confirm('Clear the stored access key? You will need to enter it again to view data.')) clearKey() }}>Clear</button>
             </>
           ) : (
             <button className="btn" onClick={() => setShowKeyPanel(true)} style={{ marginLeft: 8 }}>Enter access key</button>
